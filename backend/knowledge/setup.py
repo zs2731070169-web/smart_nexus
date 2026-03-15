@@ -1,0 +1,29 @@
+from setuptools import setup, find_packages
+
+setup(
+    name='smart_nexus',
+    version='0.0.1',
+    packages=find_packages(),
+    install_requires=[
+        'fastapi',
+        'python-multipart',
+        'aiofiles',
+        'beautifulsoup4',
+        'tqdm',
+        'langchain-text-splitters',
+        'langchain-classic',
+        'uvicorn',
+        'requests',
+        'python-dotenv',
+        'langchain-core',
+        'langchain-community',
+        'langchain-openai',
+        'langchain-chroma',
+        'pydantic-settings',
+        'markdownify',
+        'scikit-learn',
+        'jieba',
+        'unstructured',
+        'markdown'
+    ]
+)

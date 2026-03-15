@@ -1,0 +1,16 @@
+fastapi
+uvicorn
+requests
+python-dotenv
+langchain-core
+langchain-community
+langchain-openai
+langchain-chroma
+pydantic-settings
+markdownify
+scikit-learn
+jieba
+unstructured
+markdown
+python-multipart
+protobuf>=3.20,<6

@@ -1,0 +1,8 @@
+/.jbeval/
+/.claude/
+/backend/knowledge/.env
+/.idea/
+/backend/knowledge/chroma_kb/
+/backend/knowledge/data/
+/backend/knowledge/smart_nexus.egg-info/
+__pycache__/
