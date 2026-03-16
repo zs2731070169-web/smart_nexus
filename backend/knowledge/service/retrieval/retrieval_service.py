@@ -193,7 +193,7 @@ class RetrievalService:
         score_rerank_list: list[tuple[float, Document]] = []
         calculate_score_list: list[Document] = []
 
-        DYNAMIC_THRESHOLD = 0.6
+        DYNAMIC_THRESHOLD = 0.5
 
         # 遍历去重后的候选文档列表，如果是长文本分片就直接添加到分数排序列表，如果不是就添加到重计算分数列表
         for index, document in enumerate(unique_candidates):
