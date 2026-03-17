@@ -4,10 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 项目概述
 
-Smart Nexus 是一个基于 RAG（检索增强生成）的知识库系统，从 Lenovo iKnow 平台爬取数据，经过 Markdown 处理和文本分块后向量化存储到 Chroma，再通过 LangChain 进行检索和问答。项目处于早期阶段（v0.0.1），前端尚未开发。
+Smart Nexus 是一个基于 RAG（检索增强生成）的知识库问答系统，定位为电脑售后智能知识顾问。后端从 Lenovo iKnow 平台爬取数据，经过 Markdown 处理和文本分块后向量化存储到 Chroma，通过 LangChain 进行检索和问答；前端提供聊天式交互界面和知识库文档上传功能。
 
 ## 技术栈
 
+### 后端（`backend/knowledge/`）
 - **语言**: Python 3
 - **Web 框架**: FastAPI + Uvicorn
 - **AI/LLM**: LangChain（langchain-core, langchain-openai, langchain-community, langchain-classic）
@@ -15,9 +16,17 @@ Smart Nexus 是一个基于 RAG（检索增强生成）的知识库系统，从 
 - **中文处理**: jieba 分词（用于关键词匹配）、BeautifulSoup（HTML 清洗）
 - **配置管理**: pydantic-settings，环境变量通过 `backend/knowledge/.env` 加载
 
+### 前端（`front/`）
+- **框架**: Vue 3（Options API + `setup()`）+ Vite 6
+- **UI 库**: Element Plus（按需加载，通过 unplugin-vue-components + unplugin-auto-import）
+- **图标**: @element-plus/icons-vue（显式具名导入，天然 tree-shakeable）
+- **HTTP**: Axios（统一封装在 `src/api/request.js`，baseURL 为 `/api`）
+- **Markdown 渲染**: marked（自定义 renderer 将图片链接渲染为 `<img>`）
+
 ## 常用命令
 
 ```bash
+# ===== 后端 =====
 # 安装依赖
 cd backend/knowledge && pip install -r requirements.txt
 # 或以开发模式安装
@@ -31,14 +40,24 @@ cd backend/knowledge && python -m cli.crawl_cli
 
 # 批量摄入文档到向量库（将 crawl 目录下的 md 文件向量化）
 cd backend/knowledge && python -m cli.ingestion_cli
+
+# ===== 前端 =====
+# 安装依赖
+cd front && npm install
+
+# 启动开发服务器（默认端口 3000，通过 .env 中 VITE_PORT 配置）
+cd front && npm run dev
+
+# 生产构建
+cd front && npm run build
 ```
 
-**注意**: 目前没有配置 linting 工具和正式测试框架。`test/` 目录下的文件是手动测试脚本（直接 `python` 运行），不基于 pytest 或 unittest。
+**注意**: 目前没有配置 linting 工具和正式测试框架。后端 `test/` 目录下的文件是手动测试脚本（直接 `python` 运行），不基于 pytest 或 unittest。前端无测试配置。
 
 ## 架构
 
 ```
-backend/knowledge/         # 主应用包（也是 setup.py 和 requirements.txt 所在目录）
+backend/knowledge/         # 后端主应用包（也是 setup.py 和 requirements.txt 所在目录）
   api/
     main.py                # FastAPI 应用入口（root_path="/smart/nexus/knowledge"）
     router.py              # 路由定义：POST /injection/upload, POST /retrieval/query
@@ -52,13 +71,39 @@ backend/knowledge/         # 主应用包（也是 setup.py 和 requirements.txt
     crawler/               # 网页爬虫（从 iKnow 爬取并转 Markdown）
     ingestion/             # 数据摄入（Markdown → 分块 → 向量化）
     retrieval/             # 检索服务（两路检索 + 去重 + 重排序）
-  utils/
-    file_utils.py          # 文件操作工具（文件列表、去重、元信息提取）
-    text_utils.py          # HTML 清洗、文件名清洗
-  data/crawl/              # 爬取的 Markdown 文件存储目录
-  chroma_kb/               # Chroma 向量数据持久化目录
-  .env                     # 环境变量配置
+  utils/                   # 文件操作工具、HTML 清洗
+
+front/                     # 前端 Vue 3 应用
+  src/
+    main.js                # 应用入口，仅挂载 App（无全局插件注册）
+    App.vue                # 根组件：左侧边栏 + 右侧聊天区布局
+    api/
+      request.js           # Axios 实例封装（baseURL=/api, 超时 120s）
+      knowledge.js         # API 函数：uploadFile, queryKnowledge
+    components/
+      ChatPanel/           # 聊天面板（消息列表 + Markdown 渲染 + 输入框）
+      UploadPanel/         # 文件上传面板（拖拽上传 .md/.txt）
+    assets/styles/
+      global.css           # 全局样式重置
+  .env                     # 环境变量（VITE_PORT, VITE_API_TARGET, VITE_API_BASE_PATH）
+  vite.config.js           # Vite 配置（按需加载插件 + loadEnv 读取环境变量 + API 代理）
 ```
+
+## 前后端交互
+
+前端所有 API 请求以 `/api` 为前缀，Vite 开发服务器通过 proxy 将 `/api` 重写为后端实际路径 `/smart/nexus/knowledge`，转发到后端（默认 `http://127.0.0.1:8000`）。相关配置在 `front/.env` 和 `front/vite.config.js` 中。
+
+后端 API 端点：
+- `POST /injection/upload` — 上传文件到知识库（multipart/form-data）
+- `POST /retrieval/query` — 知识库检索问答（JSON: `{ question, top_k }`）
+
+响应格式约定：`status === '200'` 表示成功，`content` 为回答内容，`description` 为错误描述。
+
+## 前端 Element Plus 按需加载机制
+
+- **组件**（`el-button`、`el-input` 等）：由 `unplugin-vue-components` 在编译时自动按需引入，模板中直接使用即可
+- **JS API**（`ElMessage`、`ElMessageBox` 等）：由 `unplugin-auto-import` 自动引入，代码中直接调用即可，无需 import
+- **图标**：需在各组件中显式 `import { IconName } from '@element-plus/icons-vue'` 并注册到 `components`
 
 ## 核心数据流
 
@@ -89,8 +134,9 @@ backend/knowledge/         # 主应用包（也是 setup.py 和 requirements.txt
 ## 关键约定
 
 - 全局配置通过 `knowledge.config.settings` 单例访问，所有配置项集中在 `settings.py`
-- 环境变量模板位于 `backend/knowledge/.env.example`，复制为 `.env` 后填写实际值。必需配置项：`API_KEY`、`BASE_URL`、`MODEL`、`EMBEDDING_MODEL`、`KNOWLEDGE_BASE_URL`
-- **工作目录**: 所有模块的运行工作目录应为 `backend/knowledge/`，因为模块内 import 使用相对包路径（如 `from config.settings import settings`）
-- **import 风格**: 统一使用相对包路径（如 `from config.settings import settings`），不使用 `from backend.knowledge.xxx` 绝对路径
+- 后端环境变量模板位于 `backend/knowledge/.env.example`，复制为 `.env` 后填写。必需项：`API_KEY`、`BASE_URL`、`MODEL`、`EMBEDDING_MODEL`、`KNOWLEDGE_BASE_URL`
+- 前端环境变量通过 `front/.env` 配置，使用 `VITE_` 前缀。可配置项：`VITE_PORT`、`VITE_API_TARGET`、`VITE_API_BASE_PATH`
+- **后端工作目录**: 所有模块的运行工作目录应为 `backend/knowledge/`，因为模块内 import 使用相对包路径（如 `from config.settings import settings`）
+- **后端 import 风格**: 统一使用相对包路径，不使用 `from backend.knowledge.xxx` 绝对路径
 - 爬取文件命名格式: `{编号:04d}_{清洗后的标题}.md`，标题最长 50 字符
 - 代码注释和文档使用简体中文
