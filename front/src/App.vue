@@ -1,4 +1,5 @@
 <template>
+  <el-config-provider :locale="zhCn">
   <div class="app-container">
     <!-- 左侧边栏 -->
     <aside class="app-sidebar">
@@ -19,17 +20,20 @@
       <ChatPanel />
     </main>
   </div>
+  </el-config-provider>
 </template>
 
 <script>
+import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import { Monitor } from '@element-plus/icons-vue'
 import ChatPanel from './components/ChatPanel/ChatPanel.vue'
 import UploadPanel from './components/UploadPanel/UploadPanel.vue'
 
 export default {
   name: 'App',
-  components: {
-    ChatPanel,
-    UploadPanel
+  components: { ChatPanel, UploadPanel, Monitor },
+  setup() {
+    return { zhCn }
   }
 }
 </script>

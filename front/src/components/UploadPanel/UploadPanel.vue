@@ -37,11 +37,12 @@
 
 <script>
 import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { FolderAdd, UploadFilled, Loading, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import { uploadFile } from '../../api/knowledge'
 
 export default {
   name: 'UploadPanel',
+  components: { FolderAdd, UploadFilled, Loading, CircleCheck, CircleClose },
   setup() {
     const uploading = ref(false)
     const uploadResult = ref(null)
