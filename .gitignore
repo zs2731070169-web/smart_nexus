@@ -6,3 +6,5 @@
 /backend/knowledge/data/
 /backend/knowledge/smart_nexus.egg-info/
 __pycache__/
+/front/dist/
+/front/node_modules/
