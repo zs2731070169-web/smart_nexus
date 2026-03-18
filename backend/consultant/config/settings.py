@@ -1,46 +1,11 @@
-import os
+from pathlib import Path
 from typing import Optional
 
-from pydantic import model_validator, Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # 模型配置
-    API_KEY: str = Field(default="", description="模型密钥")
-    BASE_URL: str = Field(default="https://api.openai-proxy.org/v1", description="模型地址")
-    MODEL: str = Field(default="gpt-4o-mini", description="语言模型")
-    EMBEDDING_MODEL: str = Field(default="text-embedding-3-large", description="嵌入模型")
-
-    # 知识库线上数据集
-    CRAWL_KNOWLEDGE_BASE_URL: str = Field(
-        default="https://iknow.lenovo.com.cn",
-        description="爬取第三方知识库的 URL"
-    )
-
-    _current_dir = os.path.dirname(os.path.abspath(__file__))
-    _backend_dir = os.path.dirname(_current_dir)  # backend/ 目录
-
-    # Chroma向量文件存放路径
-    VECTOR_STORE_PATH: str = os.path.join(_backend_dir, "knowledge", "chroma_kb")
-
-    # 爬取文件目录
-    CRAWL_OUTPUT_DIR: str = os.path.join(_backend_dir, "knowledge", "data", "crawl")
-
-    # md文件目录
-    MD_FOLDER_PATH: str = CRAWL_OUTPUT_DIR
-
-    # 文件临时存储目录
-    TMP_OUTPUT_DIR: str = os.path.join(_backend_dir, "knowledge", "data", "tmp")
-
-    # 文本拆分长度
-    CHUNK_SIZE: int = 3000
-    CHUNK_OVERLAP: int = 300
-
-    # 检索后排序数量
-    TOP_ROUGH: int = 50
-    TOP_FINAL: int = 5
-
     # ==============================模型服务商配置==============================
 
     SF_API_KEY: Optional[str] = Field(default="", description="硅基流动 API Key")
@@ -74,11 +39,11 @@ class Settings(BaseSettings):
     KNOWLEDGE_BASE_URL: Optional[str] = Field(default="http://localhost:8000/smart/nexus/knowledge/retrieval/query",
                                               description="知识库服务 URL")
 
-    model_config = SettingsConfigDict(
-        env_file=os.path.join(_backend_dir, ".env"),  # env文件在 knowledge/ 下（与 setup.py 同级）
-        extra="ignore",  # settings.py配置忽略.env中未定义的环境变量
-        env_file_encoding="utf-8",
+    config = SettingsConfigDict(
+        env_file=str(Path(__file__).parent.parent / ".env"),
+        json_file_encoding="utf-8",
         case_sensitive=True,  # 环境变量名大小写敏感
+        extra="ignore",  # settings.py配置忽略.env中未定义的环境变量
         validate_default=True  # 验证默认值
     )
 
@@ -90,13 +55,10 @@ class Settings(BaseSettings):
         """
         is_valid = any([self.SF_API_KEY or self.SF_BASE_URL.strip(),
                         self.AL_BAILIAN_API_KEY or self.AL_BAILIAN_API_KEY.strip(),
-                        self.BAIDUMAP_AK or self.BAIDUMAP_AK.strip(),
-                        self.API_KEY or self.API_KEY.strip()])
+                        self.BAIDUMAP_AK or self.BAIDUMAP_AK.strip()])
 
         if not is_valid:
             raise ValueError("API KEY 无效")
-
-        return self
 
 
 settings = Settings()
