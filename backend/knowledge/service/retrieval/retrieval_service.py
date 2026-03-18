@@ -278,7 +278,7 @@ class RetrievalService:
 
             file_metadata['keyword_score'] = SCORE_WEIGHT * score_by_term + (1 - SCORE_WEIGHT) * score_by_char
 
-        return sorted(file_metadata_list, key=lambda x: x['keyword_score'], reverse=True)[:20]
+        return sorted(file_metadata_list, key=lambda x: x['keyword_score'], reverse=True)[:settings.TOP_ROUGH]
 
 
     def _search_metadata_by_similarity(self, query, candidates_metadata_list) -> list[dict[str, Any]]:
@@ -320,7 +320,7 @@ class RetrievalService:
             candidate_metadata['similarity_score'] = SCORE_WEIGHT * similarity_score + (1 - SCORE_WEIGHT) * keyword_score
 
         # 得到5个进一步筛选的候选文档元数据
-        return sorted(candidates_metadata_list, key=lambda x: x['similarity_score'], reverse=True)[:5]
+        return sorted(candidates_metadata_list, key=lambda x: x['similarity_score'], reverse=True)[:settings.TOP_FINAL]
 
 
     def _retrieval_long_content_split_by_similarity(self, content: str, query: str, path: str, title: str) -> list[Document]:

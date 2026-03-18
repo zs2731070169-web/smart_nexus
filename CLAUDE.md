@@ -41,6 +41,9 @@ cd backend/knowledge && python -m cli.crawl_cli
 # 批量摄入文档到向量库（将 crawl 目录下的 md 文件向量化）
 cd backend/knowledge && python -m cli.ingestion_cli
 
+# 运行手动测试脚本（test/ 目录下均为独立脚本，非 pytest）
+cd backend/knowledge && python test/retrieval_service_test.py
+
 # ===== 前端 =====
 # 安装依赖
 cd front && npm install
@@ -63,7 +66,7 @@ backend/knowledge/         # 后端主应用包（也是 setup.py 和 requiremen
     router.py              # 路由定义：POST /injection/upload, POST /retrieval/query
     schema.py              # Pydantic 请求/响应模型
   cli/
-    crawl_cli.py           # 爬虫 CLI 入口
+    crawl_cli.py           # 爬虫 CLI 入口（爬取范围在代码中硬编码，每次使用前需修改 range）
     ingestion_cli.py       # 批量摄入 CLI 入口（按 batch_size=20 分批处理）
   config/settings.py       # Pydantic BaseSettings 全局配置（单例 settings）
   repo/vector_repo.py      # Chroma 向量数据库操作封装
@@ -107,14 +110,29 @@ front/                     # 前端 Vue 3 应用
 
 ## 核心数据流
 
+### 爬虫生成的 Markdown 结构
+
+`text_parser_service.py` 将 iKnow API 返回的 JSON 转换为固定结构的 Markdown：
+
+```
+# 知识库条目:{knowledge_no}
+## 标题 / ## 问题摘要 / ## 分类 / ## 关键词 / ## 元数据
+{HTML内容转换后的Markdown}
+<!-- 文档主题:{title} Knowledge No: {knowledge_no} -->
+```
+
+末尾的 HTML 注释是有意为之，目的是在文档被切片后各片段仍保留文档主题上下文。
+
 ### 摄入流程
 爬取网页 → HTML 清洗（去除 JS/CSS/广告）→ 转 Markdown → 文本分块（chunk_size=3000, overlap=300, 按 `\n##` → `\n**` → `\n\n` 等层级分割）→ 嵌入向量化 → Chroma 存储
 
 ### 检索流程（两路并行）
 1. **一路**: 向量语义检索（Chroma L2 相似度，TOP 5）
 2. **二路**: 标题关键词匹配（jieba 分词 + 字符交集，TOP 20）→ 标题嵌入相似度精排（TOP 5）→ 长文档重新分片召回（TOP 3/文档）
-3. 合并两路结果 → 基于内容哈希去重 → 余弦相似度重排序 → 阈值过滤（0.6）或 top_k 截断
+3. 合并两路结果 → 基于内容哈希去重 → 余弦相似度重排序 → 阈值过滤（DYNAMIC_THRESHOLD=0.5）或 top_k 截断
 4. 最终文档送入 LLM 生成回答
+
+**重要**：二路检索的标题扫描目录固定为 `settings.CRAWL_OUTPUT_DIR`（爬虫输出目录）。通过 API 上传的文件在完成向量化后临时文件即被删除，因此上传的文件**仅**可被一路向量检索发现，不参与二路标题匹配。
 
 ## 大小文档的差异化处理
 
@@ -134,9 +152,10 @@ front/                     # 前端 Vue 3 应用
 ## 关键约定
 
 - 全局配置通过 `knowledge.config.settings` 单例访问，所有配置项集中在 `settings.py`
-- 后端环境变量模板位于 `backend/knowledge/.env.example`，复制为 `.env` 后填写。必需项：`API_KEY`、`BASE_URL`、`MODEL`、`EMBEDDING_MODEL`、`KNOWLEDGE_BASE_URL`
+- 后端环境变量模板位于 `backend/knowledge/.env.example`，复制为 `.env` 后填写。必需项：`API_KEY`、`BASE_URL`、`MODEL`、`EMBEDDING_MODEL`、`KNOWLEDGE_BASE_URL`；运行时可额外通过 `APP_PORT` 环境变量覆盖监听端口（默认 8000）。`.env.example` 中的示例值：`BASE_URL=https://api.openai-proxy.org/v1`、`MODEL=gpt-4o-mini`、`EMBEDDING_MODEL=text-embedding-3-large`，表明后端对接 OpenAI 兼容接口（可替换为任意兼容 API）
 - 前端环境变量通过 `front/.env` 配置，使用 `VITE_` 前缀。可配置项：`VITE_PORT`、`VITE_API_TARGET`、`VITE_API_BASE_PATH`
 - **后端工作目录**: 所有模块的运行工作目录应为 `backend/knowledge/`，因为模块内 import 使用相对包路径（如 `from config.settings import settings`）
 - **后端 import 风格**: 统一使用相对包路径，不使用 `from backend.knowledge.xxx` 绝对路径
-- 爬取文件命名格式: `{编号:04d}_{清洗后的标题}.md`，标题最长 50 字符
+- 爬取文件命名格式: `{编号:04d}_{清洗后的标题}.md`，标题最长 50 字符；爬取编号范围在 `crawl_cli.py` 的 `range()` 中硬编码，每次爬取前需手动修改
+- `settings.py` 中定义了 `TOP_ROUGH=50` 和 `TOP_FINAL=5`，但检索服务当前直接使用硬编码值（关键词粗排取 20，标题相似度精排取 5），这两个配置项目前未被 `retrieval_service.py` 引用
 - 代码注释和文档使用简体中文

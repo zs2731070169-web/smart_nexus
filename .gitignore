@@ -1,10 +1,14 @@
 /.jbeval/
 /.claude/
-/backend/knowledge/.env
+/backend/.env
 /.idea/
 /backend/knowledge/chroma_kb/
 /backend/knowledge/data/
-/backend/knowledge/smart_nexus.egg-info/
 __pycache__/
 /front/dist/
 /front/node_modules/
+/backend/knowledge/smart_nexus.egg-info/
+/backend/consultant/smart_nexus.egg-info/
+/backend/consultant/log/
+/backend/consultant/.env
+/backend/knowledge/.env

@@ -1,37 +1,44 @@
 import os
-from typing import Optional
 
-from pydantic import model_validator, Field
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    # 模型配置
+    """Knowledge 模块配置（仅包含知识库相关配置项）"""
+
+    # ============================== LLM 模型配置 ==============================
+
     API_KEY: str = Field(default="", description="模型密钥")
     BASE_URL: str = Field(default="https://api.openai-proxy.org/v1", description="模型地址")
     MODEL: str = Field(default="gpt-4o-mini", description="语言模型")
     EMBEDDING_MODEL: str = Field(default="text-embedding-3-large", description="嵌入模型")
 
-    # 知识库线上数据集
-    CRAWL_KNOWLEDGE_BASE_URL: str = Field(
+    # ============================== 爬虫数据源 ==============================
+
+    KNOWLEDGE_BASE_URL: str = Field(
         default="https://iknow.lenovo.com.cn",
         description="爬取第三方知识库的 URL"
     )
 
-    _current_dir = os.path.dirname(os.path.abspath(__file__))
-    _backend_dir = os.path.dirname(_current_dir)  # backend/ 目录
+    # ============================== 路径配置 ==============================
 
-    # Chroma向量文件存放路径
-    VECTOR_STORE_PATH: str = os.path.join(_backend_dir, "knowledge", "chroma_kb")
+    _current_dir = os.path.dirname(os.path.abspath(__file__))
+    _knowledge_dir = os.path.dirname(_current_dir)  # knowledge/ 目录
+
+    # Chroma 向量文件存放路径
+    VECTOR_STORE_PATH: str = os.path.join(_knowledge_dir, "chroma_kb")
 
     # 爬取文件目录
-    CRAWL_OUTPUT_DIR: str = os.path.join(_backend_dir, "knowledge", "data", "crawl")
+    CRAWL_OUTPUT_DIR: str = os.path.join(_knowledge_dir, "data", "crawl")
 
-    # md文件目录
+    # md 文件目录
     MD_FOLDER_PATH: str = CRAWL_OUTPUT_DIR
 
     # 文件临时存储目录
-    TMP_OUTPUT_DIR: str = os.path.join(_backend_dir, "knowledge", "data", "tmp")
+    TMP_OUTPUT_DIR: str = os.path.join(_knowledge_dir, "data", "tmp")
+
+    # ============================== 文本处理配置 ==============================
 
     # 文本拆分长度
     CHUNK_SIZE: int = 3000
@@ -41,62 +48,11 @@ class Settings(BaseSettings):
     TOP_ROUGH: int = 50
     TOP_FINAL: int = 5
 
-    # ==============================模型服务商配置==============================
-
-    SF_API_KEY: Optional[str] = Field(default="", description="硅基流动 API Key")
-    SF_BASE_URL: Optional[str] = Field(default="https://api.siliconflow.cn/v1", description="硅基流动 Base URL")
-    MAIN_MODEL_NAMEP: Optional[str] = Field(default="Qwen/Qwen3-32B", description="硅基流动模型")
-
-    AL_BAILIAN_API_KEY: Optional[str] = Field(default="", description="百链 API Key")
-    AL_BAILIAN_BASE_URL: Optional[str] = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                                               description="百链 Base URL")
-    SUB_MODEL_NAME: Optional[str] = Field(default="qwen3-max", description="百链模型")
-
-    # ==============================数据库科配置==============================
-
-    MYSQL_HOST: Optional[str] = Field(default="localhost", description="MySQL 主机地址")
-    MYSQL_PORT: Optional[int] = Field(default=3306, description="MySQL 端口")
-    MYSQL_USER: Optional[str] = Field(default="root", description="MySQL 用户名")
-    MYSQL_PASSWORD: Optional[str] = Field(default="root", description="MySQL 密码")
-    MYSQL_DATABASE: Optional[str] = Field(default="smart_nexus", description="MySQL 数据库名称")
-    MYSQL_CHARSET: Optional[str] = Field(default="utf8mb4", description="MySQL 字符集")
-    MYSQL_CONNECT_TIMEOUT: Optional[int] = Field(default=10, description="MySQL 连接超时时间（秒）")
-    MYSQL_MAX_CONNECTIONS: Optional[int] = Field(default=5, description="MySQL 最大连接数")
-
-    # ==============================MCP配置==============================
-
-    DASHSCOPE_BASE_URL: Optional[str] = Field(default="https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/sse",
-                                              description="百炼搜索MCP URL")
-    BAIDUMAP_AK: Optional[str] = Field(default="", description="百度地图 AK")
-
-    # ==============================本地知识库URL==============================
-
-    KNOWLEDGE_BASE_URL: Optional[str] = Field(default="http://localhost:8000/smart/nexus/knowledge/retrieval/query",
-                                              description="知识库服务 URL")
-
     model_config = SettingsConfigDict(
-        env_file=os.path.join(_backend_dir, ".env"),  # env文件在 knowledge/ 下（与 setup.py 同级）
-        extra="ignore",  # settings.py配置忽略.env中未定义的环境变量
-        env_file_encoding="utf-8",
-        case_sensitive=True,  # 环境变量名大小写敏感
-        validate_default=True  # 验证默认值
+        env_file=os.path.join(_knowledge_dir, ".env"),
+        extra="ignore",
+        env_file_encoding="utf-8"
     )
-
-    @model_validator(mode="after")
-    def validation_default_value(self):
-        """
-        settings实例创建以后执行该方法校验默认值
-        :return:
-        """
-        is_valid = any([self.SF_API_KEY or self.SF_BASE_URL.strip(),
-                        self.AL_BAILIAN_API_KEY or self.AL_BAILIAN_API_KEY.strip(),
-                        self.BAIDUMAP_AK or self.BAIDUMAP_AK.strip(),
-                        self.API_KEY or self.API_KEY.strip()])
-
-        if not is_valid:
-            raise ValueError("API KEY 无效")
-
-        return self
 
 
 settings = Settings()
