@@ -1,5 +1,4 @@
 import logging
-import os
 
 from utils.file_utils import FileUtils
 

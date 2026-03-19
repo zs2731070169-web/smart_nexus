@@ -11,7 +11,7 @@ setup(
         "pydantic",
         "pydantic-settings",
         "openai",
-        "openai-agents",
+        "openai-agent",
         "pymysql",
         "dbutils",
         "pystun3"

@@ -14,17 +14,17 @@ class Settings(BaseSettings):
     SF_BASE_URL: Optional[str] = Field(default="https://api.siliconflow.cn/v1", description="硅基流动 Base URL")
     MAIN_MODEL_NAME: Optional[str] = Field(default="Qwen/Qwen3-32B", description="硅基流动模型")
 
-    AL_BAILIAN_API_KEY: Optional[str] = Field(default="", description="百链 API Key")
-    AL_BAILIAN_BASE_URL: Optional[str] = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+    AL_BAILIAN_API_KEY: Optional[str] = Field(default="", description="阿里百炼 API Key")
+    AL_BAILIAN_BASE_URL: Optional[str] = Field(default="",
                                                description="百链 Base URL")
-    SUB_MODEL_NAME: Optional[str] = Field(default="qwen3-max", description="百链模型")
+    SUB_MODEL_NAME: Optional[str] = Field(default="", description="百链模型")
 
     # ============================== 数据库配置 ==============================
 
     MYSQL_HOST: Optional[str] = Field(default="localhost", description="MySQL 主机地址")
     MYSQL_PORT: Optional[int] = Field(default=3306, description="MySQL 端口")
     MYSQL_USER: Optional[str] = Field(default="root", description="MySQL 用户名")
-    MYSQL_PASSWORD: Optional[str] = Field(default="root", description="MySQL 密码")
+    MYSQL_PASSWORD: Optional[str] = Field(default="123456", description="MySQL 密码")
     MYSQL_DATABASE: Optional[str] = Field(default="smart_nexus", description="MySQL 数据库名称")
     MYSQL_CHARSET: Optional[str] = Field(default="utf8mb4", description="MySQL 字符集")
     MYSQL_CONNECT_TIMEOUT: Optional[int] = Field(default=10, description="MySQL 连接超时时间（秒）")
@@ -32,8 +32,12 @@ class Settings(BaseSettings):
 
     # ============================== MCP 配置 ==============================
 
-    DASHSCOPE_BASE_URL: Optional[str] = Field(default="https://dashscope.aliyuncs.com/api/v1/mcps/WebSearch/sse",
-                                              description="百炼搜索 MCP URL")
+    TAVILY_BASE_URL: Optional[str] = Field(default="https://mcp.tavily.com/mcp",
+                                           description="tavily搜索 MCP URL")
+    TAVILY_API_KEY: Optional[str] = Field(default="", description="Tavily API Key")
+
+    BAIDUMAP_BASE_URL: Optional[str] = Field(default="https://mcp.map.baidu.com/mcp",
+                                             description="百度地图搜索 MCP URL")
     BAIDUMAP_AK: Optional[str] = Field(default="", description="百度地图 AK")
 
     # ============================== 本地知识库 URL ==============================
@@ -42,6 +46,10 @@ class Settings(BaseSettings):
         default="http://localhost:8000/smart/nexus/knowledge/retrieval/query",
         description="知识库服务 URL"
     )
+
+    # ============================== 文件路径 ==============================
+
+    PROMPTS_FILE_DIR: str = str(Path(__file__).parent.parent / "prompts")
 
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).parent.parent / ".env"),

@@ -1,13 +1,15 @@
 import asyncio
+import json
 
 import httpx
 from agents import function_tool
+
 from config.settings import settings
 from infra.logging.logger import log
 
 
 @function_tool
-async def retrieval_knowledge(question: str = "") -> dict:
+async def retrieval_knowledge(question: str = "") -> str:
     """
     知识库工具，用于提供电脑、电视、手机等电子设备售后技术咨询
     :param question: 用户咨询的问题
@@ -27,21 +29,21 @@ async def retrieval_knowledge(question: str = "") -> dict:
             return result
     except httpx.HTTPError as e:
         log.error(f"HTTP 请求错误: {e}")
-        return {
+        return json.dumps({
             "status_code": "error",
             "reason": f"HTTP 请求错误: [{type(e).__name__}] {str(e)}",
-        }
+        }, ensure_ascii=False)
     except Exception as e:
         log.error(f"知识工具执行失败: {e}")
-        return {
+        return json.dumps({
             "status_code": "error",
             "reason": f"知识工具执行失败: [{type(e).__name__}] {str(e)}"
-        }
+        }, ensure_ascii=False)
 
 
-async def main():
-    await knowledge_tool("电脑蓝屏，怎么办？")
-
-
-if __name__ == '__main__':
-    asyncio.run(main())
+# async def main():
+#     await retrieval_knowledge("电脑蓝屏，怎么办？")
+#
+#
+# if __name__ == '__main__':
+#     asyncio.run(main())
