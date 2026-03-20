@@ -1,4 +1,3 @@
-import asyncio
 import json
 
 import httpx
@@ -39,11 +38,3 @@ async def retrieval_knowledge(question: str = "") -> str:
             "status_code": "error",
             "reason": f"知识工具执行失败: [{type(e).__name__}] {str(e)}"
         }, ensure_ascii=False)
-
-
-# async def main():
-#     await retrieval_knowledge("电脑蓝屏，怎么办？")
-#
-#
-# if __name__ == '__main__':
-#     asyncio.run(main())

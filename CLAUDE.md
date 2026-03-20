@@ -96,14 +96,20 @@ backend/
 
   consultant/              # 多 Agent 智能顾问（setup.py + requirements.txt 各自独立）
     agent/
-      multi_agents.py      # 三个 Agent 定义：Consult Agent、Navigation Agent、Coordinator（未完成）
+      master_agent.py      # coordination_agent：主控 Agent，持有 AGENT_ROUTER 作为工具
+      agent_router.py      # @function_tool 路由器：route_consult_agent / route_navigation_agent
+      node_agents.py       # 叶节点 Agent：consult_agent（知识检索+网络搜索）、navigation_agent（地图导航）
     infra/
       ai/ai_client.py      # LLM 客户端（Silicon Flow + Alibaba Bailian，OpenAI 兼容接口）
       db/database.py       # MySQL 连接池（DBUtils.PooledDB），async get_cursor() 上下文管理
       tools/local/         # 本地工具：retrieval_knowledge（调 knowledge HTTP API）、map_navigation
-      tools/mcp/           # MCP 客户端：Tavily 搜索 + 百度地图
+      tools/mcp/           # MCP 客户端：Tavily 搜索 + 百度地图（StreamableHttp 协议）
       logging/logger.py    # 控制台 + 文件轮转日志（写入 log/ 目录）
     config/settings.py     # Pydantic BaseSettings 全局配置（单例 settings）
+    constants/enums.py     # RenderType / StreamStatus / FinishedReason / TOOL_NAME_MAPPING
+    schema/
+      request.py           # ChatRequest、UserContext、SessionRequest
+      response.py          # StreamMessages、DeltaMessage、FinishMessage（SSE 流式协议）
     prompts/               # Agent 系统 Prompt（.md 文件，通过 file_utils.load_prompt() 加载）
     utils/                 # file_utils、ip_utils、map_utils
 

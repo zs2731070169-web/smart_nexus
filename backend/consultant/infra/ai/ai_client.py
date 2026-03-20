@@ -16,5 +16,5 @@ al_llm_client = AsyncOpenAI(
 # 硅基流动模型推理模型，用于协调agent
 sf_chat_completions = OpenAIChatCompletionsModel(model=settings.MAIN_MODEL_NAME, openai_client=sf_llm_client)
 
-# 阿里千问模型通用模型，用于子agent
+# 阿里千问模型通用模型，用于所有agent
 al_chat_completions = OpenAIChatCompletionsModel(model=settings.SUB_MODEL_NAME, openai_client=al_llm_client)
