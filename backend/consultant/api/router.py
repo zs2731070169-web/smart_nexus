@@ -121,10 +121,10 @@ async def query_chat_history_list(request: Request) -> ChatHistoryResp:
         )
 
 
-@router.delete("/query_chat_history", response_model=DelHistoryResp)
+@router.delete("/delete_chat_history", response_model=DelHistoryResp)
 async def del_chat_history(
         request: Request,
-        session_id: str = Query(..., min_length=32, max_length=32, description="会话ID")
+        session_id: str = Query(..., description="会话ID")
 ) -> DelHistoryResp:
     user_id = _ensure_user_id(request)
     try:

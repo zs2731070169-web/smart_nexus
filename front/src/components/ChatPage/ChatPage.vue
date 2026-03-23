@@ -7,6 +7,7 @@
       :user-phone="authStore.userPhone"
       @new-session="createNewSession"
       @select-session="switchSession"
+      @delete-session="deleteSession"
       @open-upload="isUploadOpen = true"
     />
 
@@ -37,7 +38,7 @@
 <script setup>
 import { ref, watch, onMounted } from 'vue'
 import { authStore, clearAuth } from '../../store/auth'
-import { userLogout, queryChatHistory } from '../../api/consultant'
+import { userLogout, queryChatHistory, deleteChatHistory } from '../../api/consultant'
 import SessionSidebar from './SessionSidebar.vue'
 import ChatWindow from './ChatWindow.vue'
 import UploadPanel from '../UploadPanel/UploadPanel.vue'
@@ -171,8 +172,55 @@ const loadHistoryOnStart = async () => {
   }
 }
 
+// ===== 删除会话 =====
+const deleteSession = async (sessionId) => {
+  try {
+    await ElMessageBox.confirm('确认删除该会话记录？此操作不可撤销。', '删除确认', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return // 用户取消
+  }
+
+  // 从本地会话列表移除（本地新建的会话）
+  writeLocalSessions(readLocalSessions().filter(s => s.id !== sessionId))
+  // 清除 sessionStorage 中该会话的消息缓存
+  sessionStorage.removeItem(`smart_nexus_chat_${sessionId}`)
+
+  // 调用后端删除接口（本地纯新建、尚无消息的会话可能不存在于后端，忽略失败）
+  try {
+    await deleteChatHistory(sessionId)
+  } catch {
+    // 忽略网络/后端错误，继续从 UI 中移除
+  }
+
+  const idx = sessions.value.findIndex(s => s.id === sessionId)
+  if (idx === -1) return
+  sessions.value.splice(idx, 1)
+
+  // 若删除的是当前活跃会话，切换到相邻会话
+  if (activeSessionId.value === sessionId) {
+    if (sessions.value.length === 0) {
+      createNewSession()
+    } else {
+      activeSessionId.value = sessions.value[Math.min(idx, sessions.value.length - 1)].id
+    }
+  }
+}
+
 // ===== 退出登录 =====
 const handleLogout = async () => {
+  try {
+    await ElMessageBox.confirm('确认退出登录？', '退出确认', {
+      confirmButtonText: '退出',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+  } catch {
+    return // 用户取消
+  }
   try {
     await userLogout()
   } finally {

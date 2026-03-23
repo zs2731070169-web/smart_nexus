@@ -28,6 +28,7 @@
       >
         <el-icon class="session-icon"><ChatDotRound /></el-icon>
         <span class="session-title">{{ session.title }}</span>
+        <el-icon class="session-delete" @click.stop="$emit('delete-session', session.id)"><Delete /></el-icon>
       </div>
     </div>
 
@@ -53,7 +54,7 @@
 <script setup>
 import { computed } from 'vue'
 import {
-  Monitor, Plus, ChatDotRound, Clock, FolderAdd, User, SwitchButton
+  Monitor, Plus, ChatDotRound, Clock, FolderAdd, User, SwitchButton, Delete
 } from '@element-plus/icons-vue'
 
 const props = defineProps({
@@ -62,7 +63,7 @@ const props = defineProps({
   userPhone: { type: String, default: '' }
 })
 
-defineEmits(['new-session', 'select-session', 'open-history', 'open-upload'])
+defineEmits(['new-session', 'select-session', 'delete-session', 'open-history', 'open-upload'])
 
 const maskedPhone = computed(() =>
   props.userPhone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
@@ -182,6 +183,25 @@ const maskedPhone = computed(() =>
 .session-item.active .session-title {
   color: #1a5fa8;
   font-weight: 500;
+}
+
+.session-delete {
+  font-size: 18px;
+  color: transparent;
+  flex-shrink: 0;
+  margin-left: auto;
+  padding: 2px 3px;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+}
+
+.session-item:hover .session-delete {
+  color: #b0b3be;
+}
+
+.session-delete:hover {
+  color: #f56c6c !important;
+  background: rgba(245, 108, 108, 0.1);
 }
 
 /* ===== 工具区 ===== */

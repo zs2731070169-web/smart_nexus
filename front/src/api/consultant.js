@@ -46,6 +46,18 @@ export const userLogout = async () => {
   return res.json()
 }
 
+/**
+ * 删除历史会话
+ * @param {string} sessionId - 会话 ID
+ */
+export const deleteChatHistory = async (sessionId) => {
+  const res = await fetch(`${CONSULTANT_BASE}/delete_chat_history?session_id=${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+    headers: buildHeaders()
+  })
+  return res.json()
+}
+
 /** 查询历史会话列表 */
 export const queryChatHistory = async () => {
   const res = await fetch(`${CONSULTANT_BASE}/query_chat_history`, {
