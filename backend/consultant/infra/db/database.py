@@ -22,7 +22,8 @@ _pool = PooledDB(
     database=settings.MYSQL_DATABASE,
     charset=settings.MYSQL_CHARSET,
     connect_timeout=settings.MYSQL_CONNECT_TIMEOUT,
-    cursorclass=DictCursor  # 默认返回字典格式的查询结果
+    cursorclass=DictCursor,  # 默认返回字典格式的查询结果
+    autocommit=False # 使用手动提交
 )
 
 
@@ -53,4 +54,36 @@ async def get_cursor():
             cursor.close()
         if conn:
             # 归还连接到连接池，并非真正关闭
+            conn.close()
+
+@asynccontextmanager
+async def write_cursor():
+    """
+    从连接池中获取一个数据库的游标。
+
+    配合 with 语句使用，确保连接自动归还：
+    """
+    conn = None
+    cursor = None
+    try:
+        # 从连接池中获取连接, 连接获取是阻塞操作，放到线程中执行避免阻塞事件循环
+        conn = await asyncio.to_thread(_pool.connection)
+        cursor = conn.cursor()
+        yield cursor
+        # 提交事务
+        await asyncio.to_thread(conn.commit)
+    except pymysql.err.OperationalError:
+        log.error("无法连接到数据库，请检查数据库配置和状态")
+        raise
+    except Exception as exc:
+        log.error("写库失败，回滚事务: %s", str(exc))
+        if conn:
             await asyncio.to_thread(conn.rollback)
+        raise
+    finally:
+        if cursor:
+            # 先关闭游标，释放结果集资源
+            cursor.close()
+        if conn:
+            # 归还连接到连接池，并非真正关闭
+            conn.close()

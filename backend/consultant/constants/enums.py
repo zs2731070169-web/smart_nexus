@@ -41,7 +41,14 @@ TOOL_NAME_MAPPING = {
     "search_coordinate_source": "位置解析",
     "navigation_sites": "查询附近服务站",
 
-    # 新架构: Agent Tools
+    # Agent Tools
     "route_consult_agent": "咨询技术专家",
     "route_navigation_agent": "服务站导航专家",
+}
+
+AGENT_NAME_MAPPING = {
+    # Agent
+    "coordination_agent": "协调Agent",
+    "consult_agent": "咨询Agent",
+    "navigation_agent": "导航Agent",
 }

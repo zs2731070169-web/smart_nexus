@@ -35,76 +35,48 @@
   </div>
 </template>
 
-<script>
+<script setup>
 import { ref } from 'vue'
 import { FolderAdd, UploadFilled, Loading, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import { uploadFile } from '../../api/knowledge'
 
-export default {
-  name: 'UploadPanel',
-  components: { FolderAdd, UploadFilled, Loading, CircleCheck, CircleClose },
-  setup() {
-    const uploading = ref(false)
-    const uploadResult = ref(null)
+const uploading = ref(false)
+const uploadResult = ref(null)
 
-    // 上传前校验
-    function beforeUpload(file) {
-      const allowedTypes = ['.md', '.txt']
-      const fileName = file.name || ''
-      const ext = fileName.substring(fileName.lastIndexOf('.')).toLowerCase()
+const beforeUpload = (file) => {
+  const allowedTypes = ['.md', '.txt']
+  const ext = (file.name || '').substring((file.name || '').lastIndexOf('.')).toLowerCase()
 
-      if (!allowedTypes.includes(ext)) {
-        ElMessage.warning('仅支持上传 .md 或 .txt 格式的文件')
-        return false
+  if (!allowedTypes.includes(ext)) {
+    ElMessage.warning('仅支持上传 .md 或 .txt 格式的文件')
+    return false
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.warning('文件大小不能超过 10MB')
+    return false
+  }
+  return true
+}
+
+const handleUpload = async (options) => {
+  uploading.value = true
+  uploadResult.value = null
+  try {
+    const res = await uploadFile(options.file)
+    if (res.status === '200') {
+      uploadResult.value = {
+        success: true,
+        message: `「${res.filename}」上传成功，已拆分为 ${res.chunk_size} 个知识片段`
       }
-
-      // 限制文件大小 10MB
-      const maxSize = 10 * 1024 * 1024
-      if (file.size > maxSize) {
-        ElMessage.warning('文件大小不能超过 10MB')
-        return false
-      }
-
-      return true
+      ElMessage.success('知识库上传成功')
+    } else {
+      uploadResult.value = { success: false, message: res.description || '上传失败，请重试' }
+      ElMessage.error(res.description || '上传失败')
     }
-
-    // 自定义上传逻辑
-    async function handleUpload(options) {
-      uploading.value = true
-      uploadResult.value = null
-
-      try {
-        const res = await uploadFile(options.file)
-
-        if (res.status === '200') {
-          uploadResult.value = {
-            success: true,
-            message: `「${res.filename}」上传成功，已拆分为 ${res.chunk_size} 个知识片段`
-          }
-          ElMessage.success('知识库上传成功')
-        } else {
-          uploadResult.value = {
-            success: false,
-            message: res.description || '上传失败，请重试'
-          }
-          ElMessage.error(res.description || '上传失败')
-        }
-      } catch (err) {
-        uploadResult.value = {
-          success: false,
-          message: '上传失败，请检查网络连接或服务状态'
-        }
-      } finally {
-        uploading.value = false
-      }
-    }
-
-    return {
-      uploading,
-      uploadResult,
-      beforeUpload,
-      handleUpload
-    }
+  } catch {
+    uploadResult.value = { success: false, message: '上传失败，请检查网络连接或服务状态' }
+  } finally {
+    uploading.value = false
   }
 }
 </script>
@@ -120,11 +92,8 @@ export default {
   gap: 8px;
   font-size: 15px;
   font-weight: 500;
-  margin-bottom: 8px;
-}
-
-.panel-title .el-icon {
   color: #409eff;
+  margin-bottom: 8px;
 }
 
 .panel-desc {

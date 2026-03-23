@@ -30,7 +30,8 @@ class Metadata(BaseModel):
     """流式输出数据对象的元数据"""
     create_time: str = Field(default="", description="消息创建时间")
 
-    finished_reason: Optional[FinishedReason] = Field(default=None, description="agent结束原因，NORMAL/EXCEPTION/MAX_TOKEN")
+    finished_reason: Optional[FinishedReason] = Field(default=None,
+                                                      description="agent结束原因，NORMAL/EXCEPTION/MAX_TOKEN")
 
     error_message: Optional[str] = Field(default=None,
                                          description="如果stop_reason是EXCEPTION，这里会有错误信息；否则为空字符串")
@@ -46,34 +47,71 @@ class StreamMessages(BaseModel):
 
     metadata: Metadata = Field(description="流式输出数据对象的元数据")
 
+    @classmethod
+    def build_processing(cls, data: str, render_type: RenderType) -> "StreamMessages":
+        """构建分片消息"""
+        if not isinstance(render_type, RenderType):
+            raise TypeError("render_type 必须是 RenderType 枚举")
 
-def build_processing_stream_messages(data: str, render_type: RenderType) -> StreamMessages:
-    """构建正在处理过程中的流式消息"""
-    if not isinstance(data, str):
-        raise TypeError("返回数据必须是字符串")
+        return cls(
+            id=uuid.uuid4().hex,
+            data=DeltaMessage(data=data, render_type=render_type),
+            status=StreamStatus.PROCESSING,
+            metadata=Metadata(create_time=str(datetime.now())),
+        )
 
-    if not isinstance(render_type, RenderType):
-        raise TypeError("渲染类型必须是RenderType对象和")
+    @classmethod
+    def build_finished(cls,
+                       message_id: Optional[str] = None,
+                       finished_reason: FinishedReason = None,
+                       error_message=None) -> "StreamMessages":
+        """构建结束消息"""
+        return cls(
+            id=message_id or uuid.uuid4().hex,
+            data=FinishMessage(),
+            status=StreamStatus.FINISHED,
+            metadata=Metadata(
+                create_time=str(datetime.now()),
+                finished_reason=finished_reason,
+                error_message=error_message
+            ),
+        )
 
-    return StreamMessages(
-        id=str(uuid.uuid4().hex),
-        data=DeltaMessage(data=data, render_type=render_type),  # 返回正在流式输出的分片消息
-        status=StreamStatus.PROCESSING,
-        metadata=Metadata(create_time=str(datetime.now()))
-    )
+
+class SystemResp(BaseModel):
+    """
+    系统响应字段
+    """
+    status: str = Field(default="200", description="响应状态")
+
+    message: str = Field(default="", description="响应消息")
 
 
-def build_finished_stream_messages(message_id: Optional[str]) -> StreamMessages:
-    """构建完成时的流式消息"""
-    if message_id and not isinstance(message_id, str):
-        raise TypeError("消息id必须是字符串")
+class ChatHistoryResp(SystemResp):
+    """
+    用户聊天历史列表
+    """
+    chat_history_list: list[dict] = Field(description="历史会话列表，包含session_id、file_time、history_list信息")
 
-    if message_id is None:
-        message_id = str(uuid.uuid4().hex)
 
-    return StreamMessages(
-        id=message_id,
-        data=FinishMessage(),  # 返回结束消息
-        status=StreamStatus.FINISHED,
-        metadata=Metadata(create_time=str(datetime.now()))
-    )
+class LoginResp(SystemResp):
+    """
+    用户登录token
+    """
+    auth_token: str = Field(default=None, description="登录token")
+
+
+class CodeResp(SystemResp):
+    """
+    验证码响应
+    """
+    code: str = Field(default="", description="验证码")
+
+
+class LogoutResp(SystemResp):
+    """注销响应"""
+    pass
+
+class DelHistoryResp(SystemResp):
+    """删除历史对话消息"""
+    pass

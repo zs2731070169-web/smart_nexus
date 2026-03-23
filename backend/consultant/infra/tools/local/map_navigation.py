@@ -1,11 +1,10 @@
-import asyncio
 import json
 
 from agents import function_tool
 
-from infra.db.database import get_cursor
 from infra.logging.logger import log
 from infra.tools.mcp.mcp_client import baidu_map_mcp
+from repo.database_repo import database_repo
 from utils.ip_utils import get_public_net_ip
 from utils.map_utils import coordinate_to_lng_lat
 
@@ -62,7 +61,7 @@ async def search_coordinate_source(address: str, ip: str) -> str:
         if not ip:
             ip = get_public_net_ip()
             log.info(f"使用工具自动获取公网IP: {ip}")
-            if not ip and ip in ['127.0.0.1', '::1', 'localhost', '0.0.0.0']:
+            if ip and ip in ['127.0.0.1', '::1', 'localhost', '0.0.0.0']:
                 raise ValueError("无法获取公网唯一IP")
 
         tool_result = await baidu_map_mcp.call_tool(
@@ -135,57 +134,18 @@ async def navigation_sites(lng: float, lat: float, limit: int = 3) -> str:
                 "error": "无效查询，不是有效经纬度"
             })
 
-        sql = """
-              SELECT id,
-                     service_station_name,
-                     province,
-                     city,
-                     district,
-                     address,
-                     phone,
-                     manager,
-                     manager_phone,
-                     opening_hours,
-                     repair_types,
-                     repair_specialties,
-                     repair_services,
-                     rating,
-                     service_station_description,
-                     latitude,
-                     longitude,
-                     supported_brands,
-                     ROUND(6371 * 2 * ASIN(SQRT(
-                             POWER(SIN((latitude - %s) * PI() / 180 / 2), 2)
-                                 + COS(%s * PI() / 180) * COS(latitude * PI() / 180)
-                                 * POWER(SIN((longitude - %s) * PI() / 180 / 2), 2)
-                             )),
-                           2
-                     ) AS distance
-              FROM repair_shops
-              WHERE longitude IS NOT NULL
-                AND latitude IS NOT NULL
-                AND ABS(latitude) <= 90
-                AND ABS(longitude) <= 180
-              ORDER BY distance ASC 
-              LIMIT %s
-              """
+        # 使用经纬度查询距离最近的几条服务站记录
+        rows = await database_repo.query_list_by_lng_lat(lat=lat, lng=lng, limit=limit)
 
-        async with get_cursor() as cursor:
-            limit = max(1, min(int(limit), 3)) # 防止传入小数、过大的值、负数、0
-
-            await asyncio.to_thread(cursor.execute, sql, (lat, lat, lng, limit))
-            rows = await asyncio.to_thread(cursor.fetchall)
-            log.info(f"查询最近维修站成功，共 {len(rows)} 条记录")
-
-            return json.dumps({
-                "status": "success",
-                "query": {
-                    "lng": lng,
-                    "lat": lat,
-                    "count": len(rows)
-                },
-                "data": rows
-            }, ensure_ascii=False, default=str)
+        return json.dumps({
+            "status": "success",
+            "query": {
+                "lng": lng,
+                "lat": lat,
+                "count": len(rows)
+            },
+            "data": rows
+        }, ensure_ascii=False, default=str)
     except Exception as e:
         log.error(f"查询最近维修站失败: {e}")
         return json.dumps({

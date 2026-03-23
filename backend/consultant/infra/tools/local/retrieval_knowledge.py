@@ -23,7 +23,7 @@ async def retrieval_knowledge(question: str = "") -> str:
                 timeout=120
             )
             response.raise_for_status()
-            result = response.json()
+            result = json.dumps(response.json(), ensure_ascii=False)
             log.info(f"HTTP请求成功，知识库返回结果: {result}")
             return result
     except httpx.HTTPError as e:

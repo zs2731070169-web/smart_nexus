@@ -3,10 +3,10 @@ from openai import AsyncOpenAI
 
 from config.settings import settings
 
-sf_llm_client = AsyncOpenAI(
-    api_key=settings.SF_API_KEY,
-    base_url=settings.SF_BASE_URL,
-)
+# sf_llm_client = AsyncOpenAI(
+#     api_key=settings.SF_API_KEY,
+#     base_url=settings.SF_BASE_URL,
+# )
 
 al_llm_client = AsyncOpenAI(
     api_key=settings.AL_BAILIAN_API_KEY,
@@ -14,7 +14,7 @@ al_llm_client = AsyncOpenAI(
 )
 
 # 硅基流动模型推理模型，用于协调agent
-sf_chat_completions = OpenAIChatCompletionsModel(model=settings.MAIN_MODEL_NAME, openai_client=sf_llm_client)
+main_model = OpenAIChatCompletionsModel(model=settings.MAIN_MODEL_NAME, openai_client=al_llm_client)
 
 # 阿里千问模型通用模型，用于所有agent
-al_chat_completions = OpenAIChatCompletionsModel(model=settings.SUB_MODEL_NAME, openai_client=al_llm_client)
+sub_model = OpenAIChatCompletionsModel(model=settings.SUB_MODEL_NAME, openai_client=al_llm_client)

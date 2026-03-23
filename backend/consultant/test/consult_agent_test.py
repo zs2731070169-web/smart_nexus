@@ -72,4 +72,5 @@ async def run_all():
 
 if __name__ == '__main__':
     import asyncio
+
     asyncio.run(run_all())

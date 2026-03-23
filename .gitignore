@@ -12,3 +12,4 @@ __pycache__/
 /backend/consultant/log/
 /backend/consultant/.env
 /backend/knowledge/.env
+/backend/consultant/history/

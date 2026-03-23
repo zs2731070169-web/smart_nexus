@@ -1,8 +1,9 @@
 import axios from 'axios'
+import { KNOWLEDGE_BASE } from '../config/api'
 
-// 创建 axios 实例
+// 创建 axios 实例，baseURL 由 config/api.js 统一管理（dev代理 / Electron直连）
 const request = axios.create({
-  baseURL: '/api',
+  baseURL: KNOWLEDGE_BASE,
   timeout: 120000 // 知识库检索可能较慢，设置 2 分钟超时
 })
 

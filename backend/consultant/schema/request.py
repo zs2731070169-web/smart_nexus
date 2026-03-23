@@ -3,20 +3,20 @@ from typing import Optional
 from pydantic import Field, BaseModel
 
 
-class UserContext(BaseModel):
-    """用户上下文消息的标识"""
-    user_id: str = Field(..., description="用户登录的唯一id")
-
-    session_id: Optional[str] = Field(default=None, description="多轮会话携带的会话id")
-
-
 class ChatRequest(BaseModel):
     """用户对话请求"""
     query: str = Field(..., description="用户的咨询问题")
 
-    user_context: UserContext = Field(..., description="用户上下文信息")
+    session_id: Optional[str] = Field(default=None, description="多轮会话携带的会话id")
 
 
-class SessionRequest(BaseModel):
-    """会话列表查询请求"""
-    user_id: str = Field(..., description="用户登录的唯一id")
+class CodeRequest(BaseModel):
+    """用户登录请求"""
+    user_phone: str = Field(..., description="用户手机号")
+
+
+class LoginRequest(BaseModel):
+    """用户登录请求"""
+    user_phone: str = Field(..., description="用户手机号")
+
+    code: str = Field(..., description="验证码")
