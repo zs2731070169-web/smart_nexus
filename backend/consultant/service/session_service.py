@@ -16,10 +16,6 @@ class SessionService:
         :return:
         """
         try:
-            if user_id is None or len(user_id) == 0:
-                log.warning(f"用户ID无效，无法获取会话列表")
-                return []
-
             # 用户的会话历史列表
             chat_history_file_list = []
 
@@ -75,10 +71,6 @@ class SessionService:
         :return:
         """
         try:
-            if user_id is None or len(user_id) == 0:
-                log.warning(f"用户ID无效，无法删除历史会话")
-                return
-
             # 构建历史对话文件路径
             history_file_path = Path(settings.HISTORY_FILE_DIR).joinpath(user_id, f"{session_id}.json")
 

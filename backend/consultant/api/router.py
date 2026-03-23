@@ -121,12 +121,12 @@ async def query_chat_history_list(request: Request) -> ChatHistoryResp:
         )
 
 
-@router.delete("/query_chat_history", response_model=ChatHistoryResp)
+@router.delete("/query_chat_history", response_model=DelHistoryResp)
 async def del_chat_history(
         request: Request,
         session_id: str = Query(..., min_length=32, max_length=32, description="会话ID")
 ) -> DelHistoryResp:
-    user_id = request.state.user_id
+    user_id = _ensure_user_id(request)
     try:
         log.info(f"删除用户历史会话接口被调用，用户ID: {user_id}，会话ID: {session_id}")
         session_service.del_chat_history(user_id, session_id)
