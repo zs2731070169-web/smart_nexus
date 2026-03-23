@@ -1,26 +1,12 @@
-import { CONSULTANT_BASE } from '../config/api'
-import { authStore } from '../store/auth'
-
-/** 构造请求 Headers，自动附加 Authorization */
-const buildHeaders = (extra = {}) => {
-  const headers = { 'Content-Type': 'application/json', ...extra }
-  if (authStore.token) {
-    headers['Authorization'] = `Bearer ${authStore.token}`
-  }
-  return headers
-}
+import axios from 'axios'
+import { consultantRequest } from './request'
 
 /**
  * 获取手机验证码
  * @param {string} userPhone
  */
 export const getVerificationCode = async (userPhone) => {
-  const res = await fetch(`${CONSULTANT_BASE}/code`, {
-    method: 'POST',
-    headers: buildHeaders(),
-    body: JSON.stringify({ user_phone: userPhone })
-  })
-  return res.json()
+  return consultantRequest.post('/code', { user_phone: userPhone })
 }
 
 /**
@@ -29,21 +15,12 @@ export const getVerificationCode = async (userPhone) => {
  * @param {string} code
  */
 export const userLogin = async (userPhone, code) => {
-  const res = await fetch(`${CONSULTANT_BASE}/login`, {
-    method: 'POST',
-    headers: buildHeaders(),
-    body: JSON.stringify({ user_phone: userPhone, code })
-  })
-  return res.json()
+  return consultantRequest.post('/login', { user_phone: userPhone, code })
 }
 
 /** 退出登录 */
 export const userLogout = async () => {
-  const res = await fetch(`${CONSULTANT_BASE}/logout`, {
-    method: 'DELETE',
-    headers: buildHeaders()
-  })
-  return res.json()
+  return consultantRequest.delete('/logout')
 }
 
 /**
@@ -51,60 +28,84 @@ export const userLogout = async () => {
  * @param {string} sessionId - 会话 ID
  */
 export const deleteChatHistory = async (sessionId) => {
-  const res = await fetch(`${CONSULTANT_BASE}/delete_chat_history?session_id=${encodeURIComponent(sessionId)}`, {
-    method: 'DELETE',
-    headers: buildHeaders()
+  return consultantRequest.delete('/delete_chat_history', {
+    params: { session_id: sessionId }
   })
-  return res.json()
 }
 
 /** 查询历史会话列表 */
 export const queryChatHistory = async () => {
-  const res = await fetch(`${CONSULTANT_BASE}/query_chat_history`, {
-    method: 'POST',
-    headers: buildHeaders()
-  })
-  return res.json()
+  return consultantRequest.post('/query_chat_history')
+}
+
+// 公网 IP 缓存（整个会话只查询一次，失败时降级为空字符串由后端兜底）
+let _cachedIpPromise = null
+
+const fetchPublicIp = () => {
+  if (!_cachedIpPromise) {
+    _cachedIpPromise = axios.get('https://api.ipify.org', { params: { format: 'json' } })
+      .then(r => r.data.ip || '')
+      .catch(() => '')
+  }
+  return _cachedIpPromise
 }
 
 /**
  * 流式对话（Server-Sent Events）
+ * axios 通过 onDownloadProgress 回调读取 XHR responseText 增量实现 SSE 消费。
  * @param {string} query - 用户问题
  * @param {string} sessionId - 会话 ID（前端生成）
  * @yields {Object} StreamMessages 数据帧
  */
 export async function* streamChat(query, sessionId) {
-  const res = await fetch(`${CONSULTANT_BASE}/chat`, {
-    method: 'POST',
-    headers: buildHeaders(),
-    body: JSON.stringify({ query, session_id: sessionId })
-  })
+  const ip = await fetchPublicIp()
 
-  if (!res.ok) {
-    throw new Error(`请求失败：HTTP ${res.status}`)
-  }
+  let processedLength = 0
+  const pendingEvents = []
+  let streamDone = false
+  let notifyNewData = null
+  let streamError = null
 
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
+  const axiosPromise = consultantRequest.post(
+    '/chat',
+    { query, session_id: sessionId, ip },
+    {
+      responseType: 'text', // 禁止 axios 尝试 JSON 解析 SSE 流
+      onDownloadProgress(evt) {
+        const fullText = evt.event.target.responseText
+        const newText = fullText.slice(processedLength)
+        processedLength = fullText.length
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-
-    buffer += decoder.decode(value, { stream: true })
-    const lines = buffer.split('\n')
-    buffer = lines.pop() // 保留未完成行，等待下一帧
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      const payload = line.slice(6).trim()
-      if (!payload) continue
-      try {
-        yield JSON.parse(payload)
-      } catch {
-        // 忽略无效数据帧
+        for (const line of newText.split('\n')) {
+          if (!line.startsWith('data: ')) continue
+          const payload = line.slice(6).trim()
+          if (!payload) continue
+          try {
+            pendingEvents.push(JSON.parse(payload))
+          } catch { /* 忽略无效数据帧 */ }
+        }
+        notifyNewData?.()
       }
     }
+  )
+
+  axiosPromise
+    .then(() => { streamDone = true; notifyNewData?.() })
+    .catch((err) => { streamError = err; streamDone = true; notifyNewData?.() })
+
+  while (true) {
+    while (pendingEvents.length > 0) {
+      yield pendingEvents.shift()
+    }
+    if (streamDone) {
+      // 流结束后再次清空可能残留的事件
+      while (pendingEvents.length > 0) {
+        yield pendingEvents.shift()
+      }
+      if (streamError) throw streamError
+      break
+    }
+    await new Promise(resolve => { notifyNewData = resolve })
+    notifyNewData = null
   }
 }

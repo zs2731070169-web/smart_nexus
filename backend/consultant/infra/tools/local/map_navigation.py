@@ -13,7 +13,7 @@ from utils.map_utils import coordinate_to_lng_lat
 async def search_coordinate_source(address: str, ip: str) -> str:
     """
     通过地点获取起点经纬度
-    :param str ip: 前端传递过来的用户公网ip
+    :param str ip: 前端传递过来的用户ip
     :param str address: 地点名称
     :return: 查询结果 JSON 字符串
     :rtype: str
@@ -58,10 +58,10 @@ async def search_coordinate_source(address: str, ip: str) -> str:
     # 无法通过地名获取经纬度，再使用ip源获取坐标
     try:
         # 获取公网唯一ip
-        if not ip:
+        if not ip or ip in ['127.0.0.1', '::1', 'localhost', '0.0.0.0']:
             ip = get_public_net_ip()
             log.info(f"使用工具自动获取公网IP: {ip}")
-            if ip and ip in ['127.0.0.1', '::1', 'localhost', '0.0.0.0']:
+            if not ip:
                 raise ValueError("无法获取公网唯一IP")
 
         tool_result = await baidu_map_mcp.call_tool(

@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from typing import AsyncGenerator, AsyncIterator
+from typing import AsyncGenerator, AsyncIterator, Optional
 
 from agents import Runner, RunConfig, StreamEvent
 
@@ -15,9 +15,15 @@ MAX_TRY_COUNT = 3
 
 class AgentService:
 
-    async def stream_messages(self, query, user_id, session_id, retry_count: int = 0) -> AsyncGenerator:
+    async def stream_messages(self,
+                              query: str,
+                              user_id: str,
+                              session_id: str,
+                              ip: Optional[str] = None,
+                              retry_count: int = 0) -> AsyncGenerator:
         """
         流式处理对话生成的消息
+        :param ip:
         :param retry_count:
         :param query:
         :param user_id:
@@ -33,14 +39,18 @@ class AgentService:
             history_messages = memory_service.load_history(user_id, session_id)
 
             # 将用户最新输入加入历史消息，作为agent输入的一部分
-            history_messages.append({"role": "user", "content": query})
+            history_messages.append(
+                {
+                    "role": "user",
+                    "content": query
+                })
 
             log.info(f"加载历史消息完成，用户问题: {query}，历史消息轮数: {len(history_messages)}")
 
             # 流式执行协调agent，获取流式执行结果
             run_result = Runner.run_streamed(
                 starting_agent=coordination_agent,  # 入口agent
-                input=history_messages,
+                input=history_messages + [{"role": "user", "content": f"\n\n[非用户问题，用户当前ip：{ip}]"}]  if ip else [], # 模型参考上下文
                 context=query,  # 明确重点关注用户当前指令
                 max_turns=5,  # ReAct动作最多循环5次
                 run_config=RunConfig(tracing_disabled=True)
@@ -84,7 +94,7 @@ class AgentService:
                 await asyncio.sleep(0.5)
 
                 # 递归重试
-                async for chunk in self.stream_messages(query, user_id, session_id, retry_count + 1):
+                async for chunk in self.stream_messages(query, user_id, session_id, ip, retry_count + 1):
                     yield chunk
             # 超过最大重试次数，直接返回异常信息
             else:

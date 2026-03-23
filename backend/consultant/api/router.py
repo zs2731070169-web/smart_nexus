@@ -11,6 +11,20 @@ from service.session_service import session_service
 router = APIRouter(prefix="/consultant")
 
 
+def _get_client_ip(request: Request) -> str:
+    """从请求中提取客户端真实 IP，优先级：X-Forwarded-For > X-Real-IP > 直连 IP"""
+
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+
+    return request.client.host if request.client else ""
+
+
 def _ensure_user_id(request: Request) -> Response:
     user_id = getattr(request.state, "user_id", None)
     if not user_id:
@@ -84,11 +98,13 @@ async def consultant(chat_request: ChatRequest, request: Request) -> StreamingRe
     user_id = _ensure_user_id(request)
     query = chat_request.query
     session_id = chat_request.session_id
+    # 前端显式传入的 IP 优先；未传时从请求头提取（代理场景）
+    ip = chat_request.ip or _get_client_ip(request)
 
-    log.info(f"用户咨询对话接口被调用，用户ID: {user_id}，会话ID: {session_id}，用户问题: {query}")
+    log.info(f"用户咨询对话接口被调用，用户ID: {user_id}，会话ID: {session_id}，用户问题: {query}，用户ip：{ip}")
 
     # 流式返回回复消息
-    async_generator = agent_service.stream_messages(query, user_id, session_id)
+    async_generator = agent_service.stream_messages(query, user_id, session_id, ip)
 
     # 通过sse推送流式消息
     return StreamingResponse(

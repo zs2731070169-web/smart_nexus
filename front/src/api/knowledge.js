@@ -1,4 +1,4 @@
-import request from './request'
+import { knowledgeRequest as request } from './request'
 
 /**
  * 上传文件到知识库
@@ -10,18 +10,5 @@ export const uploadFile = (file) => {
   formData.append('file', file)
   return request.post('/injection/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
-  })
-}
-
-/**
- * 查询知识库
- * @param {string} question - 查询问题
- * @param {number} topK - 返回条数，0 表示使用默认值
- * @returns {Promise} 查询结果
- */
-export const queryKnowledge = (question, topK = 0) => {
-  return request.post('/retrieval/query', {
-    question: question,
-    top_k: topK
   })
 }

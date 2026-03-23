@@ -1,3 +1,25 @@
+<script setup>
+import { ref, onMounted, onUnmounted } from 'vue'
+
+const isMaximized = ref(false)
+let removeListener = null
+
+const minimize = () => window.electronAPI?.minimize()
+const toggleMaximize = () => window.electronAPI?.maximize()
+const close = () => window.electronAPI?.close()
+
+onMounted(async () => {
+  isMaximized.value = (await window.electronAPI?.isMaximized()) ?? false
+  removeListener = window.electronAPI?.onMaximizeChange((val) => {
+    isMaximized.value = val
+  })
+})
+
+onUnmounted(() => {
+  removeListener?.()
+})
+</script>
+
 <template>
   <div class="title-bar">
     <!-- 可拖动区域 + 标题 -->
@@ -37,29 +59,7 @@
   </div>
 </template>
 
-<script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-
-const isMaximized = ref(false)
-let removeListener = null
-
-const minimize = () => window.electronAPI?.minimize()
-const toggleMaximize = () => window.electronAPI?.maximize()
-const close = () => window.electronAPI?.close()
-
-onMounted(async () => {
-  isMaximized.value = (await window.electronAPI?.isMaximized()) ?? false
-  removeListener = window.electronAPI?.onMaximizeChange((val) => {
-    isMaximized.value = val
-  })
-})
-
-onUnmounted(() => {
-  removeListener?.()
-})
-</script>
-
-<style scoped>
+<style scoped lang="scss">
 .title-bar {
   display: flex;
   align-items: center;
@@ -68,50 +68,50 @@ onUnmounted(() => {
   border-bottom: 1px solid #dde1e7;
   flex-shrink: 0;
   user-select: none;
-}
 
-.title-drag {
-  flex: 1;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  padding-left: 16px;
-  -webkit-app-region: drag;
-}
+  .title-drag {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    padding-left: 16px;
+    -webkit-app-region: drag;
 
-.title-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: #303133;
-  letter-spacing: 0.5px;
-}
+    .title-name {
+      font-size: 13px;
+      font-weight: 600;
+      color: #303133;
+      letter-spacing: 0.5px;
+    }
+  }
 
-.title-controls {
-  display: flex;
-  height: 100%;
-  -webkit-app-region: no-drag;
-}
+  .title-controls {
+    display: flex;
+    height: 100%;
+    -webkit-app-region: no-drag;
 
-.ctrl-btn {
-  width: 46px;
-  height: 100%;
-  border: none;
-  background: transparent;
-  color: #606266;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background 0.15s, color 0.15s;
-}
+    .ctrl-btn {
+      width: 46px;
+      height: 100%;
+      border: none;
+      background: transparent;
+      color: #606266;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s, color 0.15s;
 
-.ctrl-btn:hover {
-  background: rgba(0, 0, 0, 0.07);
-  color: #303133;
-}
+      &:hover {
+        background: rgba(0, 0, 0, 0.07);
+        color: #303133;
+      }
 
-.ctrl-close:hover {
-  background: #e81123;
-  color: #fff;
+      &.ctrl-close:hover {
+        background: #e81123;
+        color: #fff;
+      }
+    }
+  }
 }
 </style>

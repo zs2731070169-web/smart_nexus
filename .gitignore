@@ -7,6 +7,8 @@
 __pycache__/
 /front/dist/
 /front/node_modules/
+/front/.claude/
+/front/electron-dist/
 /backend/knowledge/smart_nexus.egg-info/
 /backend/consultant/smart_nexus.egg-info/
 /backend/consultant/log/

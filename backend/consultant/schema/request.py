@@ -9,6 +9,8 @@ class ChatRequest(BaseModel):
 
     session_id: Optional[str] = Field(default=None, description="多轮会话携带的会话id")
 
+    ip: Optional[str] = Field(default=None, description="用户真实ip")
+
 
 class CodeRequest(BaseModel):
     """用户登录请求"""

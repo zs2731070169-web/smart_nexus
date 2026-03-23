@@ -1,10 +1,34 @@
 const { app, BrowserWindow, session, Menu, dialog, ipcMain } = require('electron')
 const path = require('path')
+const fs = require('fs')
 
 const isDev = !app.isPackaged
 
 // 模块级 win 引用，供 ipcMain 访问
 let win = null
+
+/**
+ * 读取服务地址配置文件：
+ * - 开发模式：读取 front/config.json（即 electron/ 上级目录）
+ * - 生产模式：读取 exe 同目录下的 config.json（安装目录根）
+ */
+function loadAppConfig() {
+  const configPath = isDev
+    ? path.join(__dirname, '../config.json')
+    : path.join(path.dirname(process.execPath), 'config.json')
+  try {
+    const raw = fs.readFileSync(configPath, 'utf-8')
+    return JSON.parse(raw)
+  } catch (e) {
+    console.warn('[main] 读取 config.json 失败，使用内置默认值：', e.message)
+    return {
+      consultantBase: 'http://127.0.0.1:8001/smart/nexus/consultant',
+      knowledgeBase: 'http://127.0.0.1:8000/smart/nexus/knowledge'
+    }
+  }
+}
+
+const appConfig = loadAppConfig()
 
 /**
  * 为 Electron renderer 注入 CORS 响应头，允许从 file:// 协议访问本地后端
@@ -97,6 +121,12 @@ function createWindow() {
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null)
+
+  // 同步 IPC：preload 在初始化阶段调用，将配置注入渲染进程
+  ipcMain.on('app:get-config-sync', (event) => {
+    event.returnValue = appConfig
+  })
+
   createWindow()
 
   // 窗口控制 IPC

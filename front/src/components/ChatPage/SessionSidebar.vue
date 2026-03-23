@@ -1,3 +1,22 @@
+<script setup>
+import { computed } from 'vue'
+import {
+  Monitor, Plus, ChatDotRound, Clock, FolderAdd, User, SwitchButton, Delete
+} from '@element-plus/icons-vue'
+
+const props = defineProps({
+  sessions: { type: Array, required: true },
+  activeSessionId: { type: String, required: true },
+  userPhone: { type: String, default: '' }
+})
+
+defineEmits(['new-session', 'select-session', 'delete-session', 'open-history', 'open-upload'])
+
+const maskedPhone = computed(() =>
+  props.userPhone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+)
+</script>
+
 <template>
   <aside class="session-sidebar">
     <!-- 品牌头部 -->
@@ -51,206 +70,186 @@
   </aside>
 </template>
 
-<script setup>
-import { computed } from 'vue'
-import {
-  Monitor, Plus, ChatDotRound, Clock, FolderAdd, User, SwitchButton, Delete
-} from '@element-plus/icons-vue'
+<style scoped lang="scss">
+$primary: #409eff;
+$border: #dde1e7;
+$text-primary: #303133;
+$text-secondary: #606266;
+$text-hint: #909399;
 
-const props = defineProps({
-  sessions: { type: Array, required: true },
-  activeSessionId: { type: String, required: true },
-  userPhone: { type: String, default: '' }
-})
-
-defineEmits(['new-session', 'select-session', 'delete-session', 'open-history', 'open-upload'])
-
-const maskedPhone = computed(() =>
-  props.userPhone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
-)
-</script>
-
-<style scoped>
 .session-sidebar {
   width: 260px;
   min-width: 260px;
   background: #eef1f6;
-  border-right: 1px solid #dde1e7;
-  color: #303133;
+  border-right: 1px solid $border;
+  color: $text-primary;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
 
-/* ===== 品牌头部 ===== */
-.sidebar-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 24px 20px 20px;
-  border-bottom: 1px solid #dde1e7;
-}
+  // 品牌头部
+  .sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 24px 20px 20px;
+    border-bottom: 1px solid $border;
 
-.brand-icon {
-  font-size: 30px;
-  color: #409eff;
-  flex-shrink: 0;
-}
+    .brand-icon {
+      font-size: 30px;
+      color: $primary;
+      flex-shrink: 0;
+    }
 
-.brand-name {
-  font-size: 17px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  margin-bottom: 2px;
-  color: #303133;
-}
+    .brand-name {
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+      color: $text-primary;
+    }
 
-.brand-slogan {
-  font-size: 11px;
-  color: #909399;
-}
+    .brand-slogan {
+      font-size: 11px;
+      color: $text-hint;
+    }
+  }
 
-/* ===== 新建按钮 ===== */
-.sidebar-section {
-  padding: 14px 12px 8px;
-}
+  // 新建按钮
+  .sidebar-section {
+    padding: 14px 12px 8px;
 
-.new-chat-btn {
-  width: 100%;
-  background: #fff;
-  border: 1px solid #dde1e7;
-  color: #409eff;
-  border-radius: 8px;
-}
+    .new-chat-btn {
+      width: 100%;
+      background: #fff;
+      border: 1px solid $border;
+      color: $primary;
+      border-radius: 8px;
 
-.new-chat-btn:hover {
-  background: #ecf5ff;
-  border-color: #409eff;
-}
+      &:hover {
+        background: #ecf5ff;
+        border-color: $primary;
+      }
+    }
+  }
 
-/* ===== 会话列表 ===== */
-.sidebar-sessions {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 12px;
-}
+  // 会话列表
+  .sidebar-sessions {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 12px;
 
-.section-label {
-  font-size: 11px;
-  color: #b0b3be;
-  padding: 6px 8px 4px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-}
+    .section-label {
+      font-size: 11px;
+      color: #b0b3be;
+      padding: 6px 8px 4px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
 
-.session-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: background 0.15s;
-  overflow: hidden;
-}
+    .session-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+      overflow: hidden;
 
-.session-item:hover {
-  background: rgba(0, 0, 0, 0.04);
-}
+      &:hover {
+        background: rgba(0, 0, 0, 0.04);
 
-.session-item.active {
-  background: #e0eaf8;
-}
+        .session-delete {
+          color: #b0b3be;
+        }
+      }
 
-.session-icon {
-  font-size: 14px;
-  color: #b0b3be;
-  flex-shrink: 0;
-}
+      &.active {
+        background: #e0eaf8;
 
-.session-item.active .session-icon {
-  color: #409eff;
-}
+        .session-icon { color: $primary; }
+        .session-title { color: #1a5fa8; font-weight: 500; }
+      }
 
-.session-title {
-  font-size: 13px;
-  color: #606266;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+      .session-icon {
+        font-size: 14px;
+        color: #b0b3be;
+        flex-shrink: 0;
+      }
 
-.session-item.active .session-title {
-  color: #1a5fa8;
-  font-weight: 500;
-}
+      .session-title {
+        font-size: 13px;
+        color: $text-secondary;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
 
-.session-delete {
-  font-size: 18px;
-  color: transparent;
-  flex-shrink: 0;
-  margin-left: auto;
-  padding: 2px 3px;
-  border-radius: 4px;
-  transition: color 0.15s, background 0.15s;
-}
+      .session-delete {
+        font-size: 18px;
+        color: transparent;
+        flex-shrink: 0;
+        margin-left: auto;
+        padding: 2px 3px;
+        border-radius: 4px;
+        transition: color 0.15s, background 0.15s;
 
-.session-item:hover .session-delete {
-  color: #b0b3be;
-}
+        &:hover {
+          color: #f56c6c !important;
+          background: rgba(245, 108, 108, 0.1);
+        }
+      }
+    }
+  }
 
-.session-delete:hover {
-  color: #f56c6c !important;
-  background: rgba(245, 108, 108, 0.1);
-}
+  // 工具区
+  .sidebar-tools {
+    padding: 8px 12px;
+    border-top: 1px solid $border;
 
-/* ===== 工具区 ===== */
-.sidebar-tools {
-  padding: 8px 12px;
-  border-top: 1px solid #dde1e7;
-}
+    .tool-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      color: $text-secondary;
+      transition: all 0.15s;
 
-.tool-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 9px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
-  color: #606266;
-  transition: all 0.15s;
-}
+      &:hover {
+        background: rgba(0, 0, 0, 0.04);
+        color: $text-primary;
+      }
 
-.tool-item:hover {
-  background: rgba(0, 0, 0, 0.04);
-  color: #303133;
-}
+      .el-icon {
+        font-size: 15px;
+      }
+    }
+  }
 
-.tool-item .el-icon {
-  font-size: 15px;
-}
+  // 用户信息
+  .sidebar-user {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 14px;
+    border-top: 1px solid $border;
 
-/* ===== 用户信息 ===== */
-.sidebar-user {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-top: 1px solid #dde1e7;
-}
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 13px;
+      color: $text-hint;
 
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #909399;
+      .user-phone {
+        font-family: 'Courier New', monospace;
+        letter-spacing: 0.5px;
+      }
+    }
+  }
 }
-
-.user-phone {
-  font-family: 'Courier New', monospace;
-  letter-spacing: 0.5px;
-}
-
 </style>

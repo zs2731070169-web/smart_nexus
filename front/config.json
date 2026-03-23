@@ -1,0 +1,5 @@
+{
+  "consultantBase": "http://127.0.0.1:8001/smart/nexus/consultant",
+  "knowledgeBase": "http://127.0.0.1:8000/smart/nexus/knowledge"
+}
+

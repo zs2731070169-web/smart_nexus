@@ -1,43 +1,8 @@
-<template>
-  <div class="chat-page">
-    <!-- 左侧会话边栏 -->
-    <SessionSidebar
-      :sessions="sessions"
-      :active-session-id="activeSessionId"
-      :user-phone="authStore.userPhone"
-      @new-session="createNewSession"
-      @select-session="switchSession"
-      @delete-session="deleteSession"
-      @open-upload="isUploadOpen = true"
-    />
-
-    <!-- 右侧对话窗口（v-show 保持组件挂载，防止切换时丢失进行中的对话状态） -->
-    <ChatWindow
-      v-for="session in sessions"
-      v-show="session.id === activeSessionId"
-      :key="session.id"
-      :session-id="session.id"
-      :session-title="session.title"
-      :preloaded-messages="session.preloadedMessages"
-      @session-named="updateSessionTitle"
-      @logout="handleLogout"
-    />
-
-    <!-- 知识库管理抽屉 -->
-    <el-drawer
-      v-model="isUploadOpen"
-      title="知识库文档管理"
-      direction="rtl"
-      size="380px"
-    >
-      <UploadPanel />
-    </el-drawer>
-  </div>
-</template>
-
 <script setup>
 import { ref, watch, onMounted } from 'vue'
-import { authStore, clearAuth } from '../../store/auth'
+import { useAuthStore } from '../../store/auth'
+
+const authStore = useAuthStore()
 import { userLogout, queryChatHistory, deleteChatHistory } from '../../api/consultant'
 import SessionSidebar from './SessionSidebar.vue'
 import ChatWindow from './ChatWindow.vue'
@@ -224,7 +189,7 @@ const handleLogout = async () => {
   try {
     await userLogout()
   } finally {
-    clearAuth()
+    authStore.clearAuth()
   }
 }
 
@@ -233,7 +198,44 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
+<template>
+  <div class="chat-page">
+    <!-- 左侧会话边栏 -->
+    <SessionSidebar
+      :sessions="sessions"
+      :active-session-id="activeSessionId"
+      :user-phone="authStore.userPhone"
+      @new-session="createNewSession"
+      @select-session="switchSession"
+      @delete-session="deleteSession"
+      @open-upload="isUploadOpen = true"
+    />
+
+    <!-- 右侧对话窗口（v-show 保持组件挂载，防止切换时丢失进行中的对话状态） -->
+    <ChatWindow
+      v-for="session in sessions"
+      v-show="session.id === activeSessionId"
+      :key="session.id"
+      :session-id="session.id"
+      :session-title="session.title"
+      :preloaded-messages="session.preloadedMessages"
+      @session-named="updateSessionTitle"
+      @logout="handleLogout"
+    />
+
+    <!-- 知识库管理抽屉 -->
+    <el-drawer
+      v-model="isUploadOpen"
+      title="知识库文档管理"
+      direction="rtl"
+      size="380px"
+    >
+      <UploadPanel />
+    </el-drawer>
+  </div>
+</template>
+
+<style scoped lang="scss">
 .chat-page {
   display: flex;
   height: 100%;
