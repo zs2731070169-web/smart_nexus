@@ -1,0 +1,432 @@
+# Smart Nexus 云服务器部署文档
+
+## 架构总览
+
+```
+用户电脑（Electron 桌面客户端）
+    ↓ HTTP / HTTPS
+云服务器
+    └── Nginx（80 / 443，反向代理）
+          ├── /smart/nexus/knowledge  →  knowledge 容器（:8000，FastAPI）
+          └── /smart/nexus/consultant →  consultant 容器（:8001，FastAPI + SSE）
+                    ↓ 依赖
+                ├── MySQL 容器（:3306）
+                └── Redis 容器（:6379）
+```
+
+---
+
+## 一、服务器初始化
+
+### 1.1 推荐配置
+
+| 配置项 | 最低要求 | 推荐 |
+|--------|---------|------|
+| CPU    | 2 核    | 4 核 |
+| 内存   | 4 GB   | 8 GB |
+| 磁盘   | 40 GB SSD | 80 GB SSD |
+| 系统   | Ubuntu 22.04 LTS | Ubuntu 22.04 LTS |
+| 带宽   | 3 Mbps | 5 Mbps（SSE 流式响应） |
+
+### 1.2 安装 Docker
+
+> 必须从 Docker 官方源安装，Ubuntu 默认源缺少 `docker-compose-plugin`。
+
+```bash
+# 卸载旧版本（如已装过）
+sudo apt remove docker docker.io containerd runc -y
+
+# 安装依赖
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg
+
+# 添加 Docker 官方 GPG 密钥
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+# 添加 Docker 官方 apt 源
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# 安装 Docker + Compose 插件
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+
+# 验证安装
+docker --version          # Docker version 27.x.x
+docker compose version    # Docker Compose version v2.x.x
+
+# 将当前用户加入 docker 组（避免每次 sudo）
+sudo usermod -aG docker $USER && newgrp docker
+```
+
+### 1.3 开放防火墙端口
+
+**① 云服务商控制台**（阿里云 / 腾讯云 / 华为云）安全组入站规则添加：
+
+| 端口 | 协议 | 用途 |
+|------|------|------|
+| 22   | TCP  | SSH（一般默认已开） |
+| 80   | TCP  | HTTP |
+| 443  | TCP  | HTTPS（启用 SSL 时） |
+
+**② 服务器系统防火墙**：
+
+```bash
+sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw enable
+sudo ufw status
+```
+
+---
+
+## 二、上传代码
+
+**方式 A — Git（推荐）：**
+
+```bash
+cd /opt
+git clone https://github.com/你的仓库/smart_nexus.git
+cd smart_nexus
+```
+
+**方式 B — scp 直传（本地 Windows 执行）：**
+
+```bash
+scp -r F:/projects/smart_nexus root@你的服务器IP:/opt/smart_nexus
+```
+
+---
+
+## 三、配置环境变量
+
+> 这是部署最关键的步骤，两个 `.env` 文件均不进 git，需在服务器上手动创建。
+
+### 3.1 knowledge 后端
+
+```bash
+cd /opt/smart_nexus/backend/knowledge
+cp .env.example .env
+nano .env
+```
+
+```ini
+# LLM 模型（用于知识库问答和向量嵌入）
+API_KEY=你的 OpenAI 兼容接口 API Key
+BASE_URL=https://api.openai-proxy.org/v1
+MODEL=gpt-4o-mini
+EMBEDDING_MODEL=text-embedding-3-large
+
+# Lenovo iKnow 爬虫目标地址（一般不需要改）
+KNOWLEDGE_BASE_URL=https://iknow.lenovo.com.cn
+```
+
+### 3.2 consultant 后端
+
+```bash
+cd /opt/smart_nexus/backend/consultant
+cp .env.example .env
+nano .env
+```
+
+```ini
+# 阿里百炼 LLM（必填）
+AL_BAILIAN_API_KEY=你的阿里百炼 API Key
+AL_BAILIAN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+MAIN_MODEL_NAME=qwen3.5-plus
+SUB_MODEL_NAME=qwen3.5-flash
+
+# MySQL（MYSQL_HOST 必须填 mysql，容器间通过服务名通信）
+MYSQL_HOST=mysql
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=设置一个强密码（与后续 docker compose 使用同一个）
+MYSQL_DATABASE=smart_nexus
+MYSQL_CHARSET=utf8mb4
+MYSQL_CONNECT_TIMEOUT=10
+MYSQL_MAX_CONNECTIONS=5
+
+# MCP 工具（必填）
+TAVILY_BASE_URL=https://mcp.tavily.com/mcp
+TAVILY_API_KEY=你的 Tavily API Key
+BAIDUMAP_BASE_URL=https://mcp.map.baidu.com/mcp
+BAIDUMAP_AK=你的百度地图 AK
+
+# 知识库服务地址（固定填容器服务名，不要改）
+KNOWLEDGE_BASE_URL=http://knowledge:8000/smart/nexus/knowledge/retrieval/query
+
+# 系统配置（固定值，不要改）
+APP_PORT=8001
+APP_HOST=0.0.0.0
+
+# 登录鉴权
+# 用以下命令生成 SECRET_KEY：
+#   python3 -c "import secrets; print(secrets.token_hex(32))"
+SECRET_KEY=把上面命令的输出粘贴到这里
+ALGORITHM=HS256
+TOKEN_EXPIRE_HOURS=24
+
+# 白名单（固定值，不要改）
+WHITE_LIST=["/smart/nexus/consultant/code","/smart/nexus/consultant/login"]
+```
+
+---
+
+## 四、启动后端服务
+
+`deploy.sh` 会自动完成：检查依赖 → 读取 MySQL 密码 → 创建数据目录 → 构建并启动所有容器。
+
+```bash
+cd /opt/smart_nexus
+bash backend/deploy/cmd/deploy.sh
+```
+
+脚本从 `consultant/.env` 的 `MYSQL_PASSWORD` 自动读取 MySQL root 密码，无需手动输入。
+
+**正常完成示例：**
+
+```
+============================
+ ① 检查环境依赖
+============================
+[INFO]  Docker：Docker version 24.0.0 ...
+[INFO]  Docker Compose：Docker Compose version v2.x.x
+[INFO]  Docker 服务运行正常 ✓
+...
+[INFO]  🚀 Smart Nexus 部署完成！
+[INFO]  📡 访问地址：http://你的服务器IP
+```
+
+---
+
+## 五、验证后端服务
+
+### 5.1 确认容器全部正常运行
+
+```bash
+cd /opt/smart_nexus/backend/deploy/docker
+docker compose ps
+```
+
+期望 5 个服务全部 `Up`：
+
+```
+NAME        STATUS
+nginx       Up
+knowledge   Up
+consultant  Up
+mysql       Up
+redis       Up
+```
+
+### 5.2 验证接口联通性
+
+```bash
+# 测试 knowledge 服务
+curl http://你的服务器IP/smart/nexus/knowledge/
+
+# 测试 consultant 获取验证码接口
+curl -X POST http://你的服务器IP/smart/nexus/consultant/code \
+  -H "Content-Type: application/json" \
+  -d '{"phone":"13800000000"}'
+# 期望返回：{"status":"200",...}
+```
+
+### 5.3 出错时查看日志
+
+```bash
+docker compose logs -f consultant
+docker compose logs -f knowledge
+docker compose logs -f mysql
+```
+
+---
+
+## 六、配置 HTTPS（可选但推荐）
+
+### 6.1 申请 SSL 证书
+
+> 前提：域名 DNS 已解析到服务器 IP，且 80 端口可访问。
+
+```bash
+sudo apt install -y certbot
+
+# 暂停 nginx 释放 80 端口
+cd /opt/smart_nexus/backend/deploy/docker
+docker compose stop nginx
+
+# 申请证书
+sudo certbot certonly --standalone -d 你的域名.com
+
+# 重启 nginx
+docker compose start nginx
+```
+
+### 6.2 挂载证书
+
+```bash
+mkdir -p /opt/smart_nexus/backend/deploy/nginx/ssl
+sudo cp /etc/letsencrypt/live/你的域名.com/fullchain.pem \
+        /opt/smart_nexus/backend/deploy/nginx/ssl/
+sudo cp /etc/letsencrypt/live/你的域名.com/privkey.pem \
+        /opt/smart_nexus/backend/deploy/nginx/ssl/
+```
+
+### 6.3 修改 nginx.conf 启用 HTTPS
+
+编辑 `backend/deploy/nginx/nginx.conf`：
+
+1. **取消注释 HTTP 跳转块**：
+```nginx
+server {
+    listen 80;
+    server_name 你的域名.com;
+    return 301 https://$host$request_uri;
+}
+```
+
+2. **将原来的 `listen 80;` 替换为**：
+```nginx
+listen 443 ssl;
+server_name 你的域名.com;
+ssl_certificate     /etc/nginx/ssl/fullchain.pem;
+ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+```
+
+### 6.4 取消 docker-compose.yml 中 SSL 目录的注释
+
+编辑 `backend/deploy/docker/docker-compose.yml`，取消第 8 行注释：
+
+```yaml
+- ../nginx/ssl:/etc/nginx/ssl
+```
+
+### 6.5 重启 Nginx
+
+```bash
+cd /opt/smart_nexus/backend/deploy/docker
+docker compose restart nginx
+```
+
+### 6.6 设置证书自动续签
+
+```bash
+(crontab -l 2>/dev/null; echo "0 3 1 * * certbot renew --quiet && \
+  cp /etc/letsencrypt/live/你的域名.com/fullchain.pem /opt/smart_nexus/backend/deploy/nginx/ssl/ && \
+  cp /etc/letsencrypt/live/你的域名.com/privkey.pem /opt/smart_nexus/backend/deploy/nginx/ssl/ && \
+  docker compose -f /opt/smart_nexus/backend/deploy/docker/docker-compose.yml restart nginx") | crontab -
+```
+
+---
+
+## 七、打包前端 Electron 客户端
+
+> 在**本地 Windows 开发机**上执行，不是服务器。
+
+### 7.1 修改 config.json 指向云服务器
+
+编辑 `front/config.json`：
+
+```json
+{
+  "consultantBase": "http://你的服务器IP/smart/nexus/consultant",
+  "knowledgeBase":  "http://你的服务器IP/smart/nexus/knowledge"
+}
+```
+
+如已配置 HTTPS 则使用 `https://你的域名.com/...`。
+
+### 7.2 打包
+
+```bash
+cd front
+npm install
+npm run electron:build
+```
+
+打包完成后，安装包位于 `front/electron-dist/` 目录下（`.exe` 安装程序）。
+
+### 7.3 说明：用户如何切换服务器地址
+
+用户安装完成后，如需更换服务器地址，只需修改**安装目录根目录**下的 `config.json`，无需重新安装客户端。
+
+---
+
+## 八、前后端联通验证
+
+1. 安装并打开 Electron 客户端，进入登录页
+2. 输入手机号，点击「获取验证码」，在服务器日志中确认收到请求：
+   ```bash
+   docker compose logs -f consultant | grep "验证码"
+   ```
+3. 输入验证码完成登录，进入聊天页面
+4. 发送一条消息，观察 SSE 流式响应是否正常（文字逐字出现）
+
+---
+
+## 九、日常运维
+
+```bash
+# 工作目录
+cd /opt/smart_nexus/backend/deploy/docker
+
+# 查看所有容器状态
+docker compose ps
+
+# 实时查看某服务日志
+docker compose logs -f consultant
+docker compose logs -f knowledge
+
+# 重启某个服务
+docker compose restart consultant
+
+# 更新代码后重新部署
+cd /opt/smart_nexus && git pull
+bash backend/deploy/cmd/deploy.sh
+
+# 停止所有服务
+docker compose down
+
+# 停止并清除数据卷（⚠️ 数据库数据会丢失）
+docker compose down -v
+```
+
+---
+
+## 附：部署相关文件一览
+
+```
+smart_nexus/
+  backend/
+    deploy/
+      cmd/deploy.sh              # 一键部署脚本（从项目根目录执行）
+      docker/docker-compose.yml  # 五服务编排
+      nginx/nginx.conf           # 反向代理（含 SSE 优化）
+      nginx/ssl/                 # SSL 证书（启用 HTTPS 时放入）
+      db/smart_nexus.sql         # 数据库初始化脚本（首次启动自动执行）
+    knowledge/
+      Dockerfile
+      .env.example               # 配置模板
+      .env                       # 服务器上手动创建，不进 git
+    consultant/
+      Dockerfile
+      .env.example               # 配置模板
+      .env                       # 服务器上手动创建，不进 git
+    data/                        # 持久化数据（deploy.sh 自动创建，不进 git）
+      knowledge/chroma_kb/       # ChromaDB 向量库
+      knowledge/crawl/           # 爬虫输出
+      consultant/log/            # 运行日志
+      consultant/history/        # 对话历史
+      mysql/                     # MySQL 数据
+      redis/                     # Redis 数据
+  front/
+    config.json                  # 服务器地址配置，随安装包分发
+    electron-dist/               # 打包输出目录（.exe 安装程序）
+```
