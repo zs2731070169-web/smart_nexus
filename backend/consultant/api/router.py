@@ -103,6 +103,7 @@ async def consultant(chat_request: ChatRequest, request: Request) -> StreamingRe
     :param chat_request:
     :return:
     """
+    log.info(f"用户咨询对话接口被调用，接收到请求参数: {chat_request}")
     user_id = _ensure_user_id(request)
     query = chat_request.query
     session_id = chat_request.session_id
