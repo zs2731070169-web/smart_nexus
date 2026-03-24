@@ -345,6 +345,19 @@ docker compose up -d --force-recreate nginx
 
 > 在**本地 Windows 开发机**上执行，不是服务器。
 
+### 7.0 前端 API 配置说明
+
+前端有两套独立的 API 地址配置，用途不同，**不要混淆**：
+
+| 配置文件 | 作用范围 | 说明 |
+|----------|---------|------|
+| `front/.env` | 仅 `npm run dev`（Vite 开发服务器） | Vite 读取该文件做反向代理，将本地 `/api`、`/consultant` 请求转发到后端；打包产物不包含该文件 |
+| `front/config.json` | Electron 生产客户端 | 打包进安装包，运行时由主进程读取并通过 IPC 传给渲染进程；`npm run dev` 不使用此文件 |
+
+因此：
+- **测试后端联通性**（`npm run dev`）→ 修改 `front/.env` 中的 `VITE_API_TARGET` / `VITE_CONSULTANT_TARGET`
+- **打包 Electron 客户端** → 修改 `front/config.json`
+
 ### 7.1 修改 config.json 指向云服务器
 
 编辑 `front/config.json`：
@@ -472,6 +485,68 @@ docker compose up -d --force-recreate nginx
 ```bash
 docker compose -f /opt/smart_nexus/backend/deploy/docker/docker-compose.yml logs -f consultant
 ```
+
+### `npm run dev` 前端报 `ECONNREFUSED` 或接口返回 500
+
+**原因**：`front/.env` 中的代理目标地址配置错误或域名解析到了旧 IP。按以下步骤逐一排查：
+
+**步骤 1：确认 `.env` 已配置正确的后端地址**
+
+`front/.env` 中两个代理目标必须指向实际可访问的后端（HTTP 或 HTTPS）：
+
+```ini
+VITE_API_TARGET=https://你的域名.com          # knowledge 服务
+VITE_CONSULTANT_TARGET=https://你的域名.com   # consultant 服务
+```
+
+> 注意：这里填完整域名（不含路径），`VITE_API_BASE_PATH` / `VITE_CONSULTANT_BASE_PATH` 单独配置路径前缀。
+
+**步骤 2：验证 443 端口是否可达**
+
+在本地 Windows PowerShell 执行：
+
+```powershell
+Test-NetConnection -ComputerName 你的域名.com -Port 443
+```
+
+若 `TcpTestSucceeded: True` 则端口通；若 `False` 则检查云服务商安全组是否已开放 443 入站规则（参考第一章 1.3 节）。
+
+**步骤 3：验证域名解析是否正确**
+
+```cmd
+nslookup 你的域名.com
+```
+
+若输出的 IP 不是服务器当前 IP，说明本机 DNS 缓存了旧记录，执行：
+
+```cmd
+ipconfig /flushdns
+```
+
+再次 `nslookup` 确认 IP 已更新。若仍解析到旧 IP，重启路由器（路由器有独立 DNS 缓存），重启后等待约 1 分钟再测试。
+
+**步骤 4：后端无日志打印 → 请求未到达服务器**
+
+若 Vite 控制台报 `ECONNREFUSED`，但服务器 `docker compose logs -f consultant` 毫无打印，说明请求在本机代理阶段就失败了（域名解析失败或端口不通），不是后端问题，继续排查步骤 2/3。
+
+### 域名解析到旧服务器 IP（DNS 缓存问题）
+
+更换服务器并修改 DNS A 记录后，本机可能仍缓存旧 IP，导致请求打到旧服务器（或不存在的地址）。
+
+**排查流程：**
+
+```cmd
+# 1. 查看当前解析结果
+nslookup 你的域名.com
+
+# 2. 刷新本机 DNS 缓存（需管理员权限的命令提示符）
+ipconfig /flushdns
+
+# 3. 再次确认解析结果
+nslookup 你的域名.com
+```
+
+若刷新后仍是旧 IP，**重启路由器**（路由器有独立缓存），待重启完成（约 1 分钟）后重试。DNS TTL 一般为 5～10 分钟，正常情况重启路由器后即可解析到新 IP。
 
 ---
 
