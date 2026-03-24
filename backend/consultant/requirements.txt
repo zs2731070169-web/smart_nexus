@@ -1,6 +1,8 @@
 fastapi
 uvicorn
 python-dotenv
+pydantic
+pydantic-settings
 pymysql
 DBUtils
 openai
@@ -9,3 +11,6 @@ openai-agents
 pystun3
 redis
 orjson
+PyJWT
+requests
+anyio
