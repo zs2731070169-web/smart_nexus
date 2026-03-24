@@ -252,6 +252,7 @@ curl -X POST http://你的服务器IP/smart/nexus/consultant/code \
 ### 5.3 出错时查看日志
 
 ```bash
+cd /opt/smart_nexus/backend/deploy/docker
 docker compose logs -f consultant
 docker compose logs -f knowledge
 docker compose logs -f mysql
@@ -312,17 +313,21 @@ ssl_certificate_key /etc/nginx/ssl/privkey.pem;
 
 ### 6.4 取消 docker-compose.yml 中 SSL 目录的注释
 
-编辑 `backend/deploy/docker/docker-compose.yml`，取消第 8 行注释：
+编辑 `backend/deploy/docker/docker-compose.yml`，找到 nginx 服务的 volumes 块，取消注释：
 
 ```yaml
-- ../nginx/ssl:/etc/nginx/ssl
+volumes:
+  - ../nginx/nginx.conf:/etc/nginx/nginx.conf
+  - ../nginx/ssl:/etc/nginx/ssl   # ← 取消这行的注释
 ```
 
-### 6.5 重启 Nginx
+### 6.5 重建并重启 Nginx
+
+> 注意：修改了 `volumes` 配置后必须用 `--force-recreate` 重建容器，单纯 `restart` 不会重新挂载目录。
 
 ```bash
 cd /opt/smart_nexus/backend/deploy/docker
-docker compose restart nginx
+docker compose up -d --force-recreate nginx
 ```
 
 ### 6.6 设置证书自动续签
@@ -384,7 +389,7 @@ npm run electron:build
 ## 九、日常运维
 
 ```bash
-# 工作目录
+# 工作目录（以下命令均在此目录执行）
 cd /opt/smart_nexus/backend/deploy/docker
 
 # 查看所有容器状态
@@ -393,19 +398,79 @@ docker compose ps
 # 实时查看某服务日志
 docker compose logs -f consultant
 docker compose logs -f knowledge
+docker compose logs -f mysql
 
-# 重启某个服务
+# 重启某个服务（配置未变时使用）
 docker compose restart consultant
+
+# 重建某个服务（修改了 volumes / 环境变量后使用）
+docker compose up -d --force-recreate consultant
 
 # 更新代码后重新部署
 cd /opt/smart_nexus && git pull
 bash backend/deploy/cmd/deploy.sh
 
 # 停止所有服务
-docker compose down
+cd /opt/smart_nexus/backend/deploy/docker && docker compose down
 
 # 停止并清除数据卷（⚠️ 数据库数据会丢失）
 docker compose down -v
+```
+
+---
+
+## 十、常见问题排错
+
+### consultant 启动报 `Connection refused`（MySQL）
+
+MySQL 首次启动需执行初始化 SQL，耗时 1～2 分钟。`deploy.sh` 已配置健康检查，consultant 会自动等待，无需手动干预。若等待超过 3 分钟仍未启动，执行：
+
+```bash
+cd /opt/smart_nexus/backend/deploy/docker
+docker compose logs mysql   # 查看 MySQL 初始化日志
+```
+
+### consultant 报 `Access denied for user 'root'`（MySQL 密码不匹配）
+
+MySQL 数据目录已用旧密码初始化，修改密码后需清空重建：
+
+```bash
+cd /opt/smart_nexus/backend/deploy/docker
+docker compose down
+rm -rf /opt/smart_nexus/data/mysql/*
+bash /opt/smart_nexus/backend/deploy/cmd/deploy.sh
+```
+
+> **预防**：`MYSQL_PASSWORD` 不要包含 `$` 等 shell 特殊字符。
+
+### consultant 报 `Error connecting to 127.0.0.1:6379`（Redis）
+
+`consultant/.env` 缺少 `REDIS_HOST=redis`，容器间必须用服务名通信：
+
+```bash
+echo "REDIS_HOST=redis" >> /opt/smart_nexus/backend/consultant/.env
+docker compose restart consultant
+```
+
+### 百度地图 MCP 连接超时
+
+境外服务器 IP 会被百度 MCP 服务拒绝，属正常现象。服务会降级为无地图工具模式继续运行，知识库问答不受影响。如需导航功能，需迁移至国内（香港或大陆）服务器。
+
+### Nginx 重启后证书报错 `No such file`
+
+nginx 容器内看不到证书，原因是 `docker-compose.yml` 中 SSL 目录挂载未取消注释。参考第六章 6.4 节，取消注释后必须用 `--force-recreate` 重建（不能用 `restart`）：
+
+```bash
+cd /opt/smart_nexus/backend/deploy/docker
+docker compose up -d --force-recreate nginx
+```
+
+### `docker compose` 报 `no configuration file provided`
+
+需在 `docker-compose.yml` 所在目录执行，或通过 `-f` 指定路径：
+
+```bash
+docker compose -f /opt/smart_nexus/backend/deploy/docker/docker-compose.yml logs -f consultant
 ```
 
 ---
