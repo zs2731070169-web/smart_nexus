@@ -13,15 +13,17 @@ router = APIRouter(prefix="/consultant")
 
 def _get_client_ip(request: Request) -> str:
     """从请求中提取客户端真实 IP，优先级：X-Forwarded-For > X-Real-IP > 直连 IP"""
-
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
+        # 从请求链路的ip列表里获取第一个ip（用户真实的原始ip）
         return forwarded_for.split(",")[0].strip()
 
     real_ip = request.headers.get("X-Real-IP")
     if real_ip:
+        # 获取上一跳ip，如果是用户直连就是用户真实ip
         return real_ip.strip()
 
+    # 获取直接访问FastAPI进程的那个客户端的ip（本地：127.0.0.1，服务器：内网ip）
     return request.client.host if request.client else ""
 
 
@@ -98,8 +100,7 @@ async def consultant(chat_request: ChatRequest, request: Request) -> StreamingRe
     user_id = _ensure_user_id(request)
     query = chat_request.query
     session_id = chat_request.session_id
-    # 前端显式传入的 IP 优先；未传时从请求头提取（代理场景）
-    ip = chat_request.ip or _get_client_ip(request)
+    ip = _get_client_ip(request)
 
     log.info(f"用户咨询对话接口被调用，用户ID: {user_id}，会话ID: {session_id}，用户问题: {query}，用户ip：{ip}")
 

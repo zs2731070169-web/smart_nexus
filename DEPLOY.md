@@ -105,11 +105,77 @@ scp -r F:/projects/smart_nexus root@你的服务器IP:/opt/smart_nexus
 
 ---
 
-## 三、配置环境变量
+## 三、配置域名与 HTTPS
+
+> **必须步骤**：`nginx.conf` 已配置为 HTTPS 专用模式（HTTP 80 强制跳转 HTTPS，无 HTTP 直连选项）。**不完成本章，nginx 容器将无法启动。** 请在启动服务之前完成本章所有步骤。
+
+前置条件：已购买域名，并在域名服务商控制台将 A 记录解析到服务器公网 IP，等待 DNS 生效（通常 5～10 分钟）。
+
+### 3.1 修改 nginx.conf 中的域名
+
+`nginx.conf` 中已写好 HTTPS 配置，只需将域名替换为你的实际域名：
+
+```bash
+nano /opt/smart_nexus/backend/deploy/nginx/nginx.conf
+```
+
+将文件中所有 `www.apidev-app.com` 替换为你的域名（共 2 处：HTTP 跳转块和 HTTPS server 块各一处）：
+
+```nginx
+# HTTP 跳转块
+server_name 你的域名.com;
+
+# HTTPS server 块
+server_name 你的域名.com;
+```
+
+### 3.2 申请 SSL 证书
+
+> 前提：域名 DNS 已解析到服务器 IP，且 80 端口未被占用（首次部署时服务尚未启动，80 端口空闲，直接申请即可）。
+
+```bash
+sudo apt install -y certbot
+
+# 申请证书（首次部署，服务未启动，直接运行）
+sudo certbot certonly --standalone -d 你的域名.com
+```
+
+> **如果服务已经在运行**（更换证书时），需先释放 80 端口：
+> ```bash
+> cd /opt/smart_nexus/backend/deploy/docker
+> docker compose stop nginx
+> sudo certbot certonly --standalone -d 你的域名.com
+> docker compose start nginx
+> ```
+
+### 3.3 挂载证书
+
+```bash
+mkdir -p /opt/smart_nexus/backend/deploy/nginx/ssl
+sudo cp /etc/letsencrypt/live/你的域名.com/fullchain.pem \
+        /opt/smart_nexus/backend/deploy/nginx/ssl/
+sudo cp /etc/letsencrypt/live/你的域名.com/privkey.pem \
+        /opt/smart_nexus/backend/deploy/nginx/ssl/
+```
+
+### 3.4 设置证书自动续签
+
+Let's Encrypt 证书有效期 90 天，设置 cron 每月自动续签：
+
+```bash
+(crontab -l 2>/dev/null; echo "0 3 1 * * certbot renew --quiet && \
+  cp /etc/letsencrypt/live/你的域名.com/fullchain.pem /opt/smart_nexus/backend/deploy/nginx/ssl/ && \
+  cp /etc/letsencrypt/live/你的域名.com/privkey.pem /opt/smart_nexus/backend/deploy/nginx/ssl/ && \
+  docker compose -f /opt/smart_nexus/backend/deploy/docker/docker-compose.yml restart nginx") | crontab -
+```
+
+---
+
+## 四、配置环境变量
 
 > 这是部署最关键的步骤，两个 `.env` 文件均不进 git，需在服务器上手动创建。
 
-### 3.1 knowledge 后端
+### 4.1 knowledge 后端
 
 ```bash
 cd /opt/smart_nexus/backend/knowledge
@@ -128,7 +194,7 @@ EMBEDDING_MODEL=text-embedding-3-large
 KNOWLEDGE_BASE_URL=https://iknow.lenovo.com.cn
 ```
 
-### 3.2 consultant 后端
+### 4.2 consultant 后端
 
 ```bash
 cd /opt/smart_nexus/backend/consultant
@@ -185,7 +251,7 @@ WHITE_LIST=["/smart/nexus/consultant/code","/smart/nexus/consultant/login"]
 
 ---
 
-## 四、启动后端服务
+## 五、启动后端服务
 
 `deploy.sh` 会自动完成：检查依赖 → 读取 MySQL 密码 → 创建数据目录 → 构建并启动所有容器。
 
@@ -209,14 +275,14 @@ bash backend/deploy/cmd/deploy.sh
 [INFO]  Docker 服务运行正常 ✓
 ...
 [INFO]  🚀 Smart Nexus 部署完成！
-[INFO]  📡 访问地址：http://你的服务器IP
+[INFO]  📡 访问地址：https://你的域名.com
 ```
 
 ---
 
-## 五、验证后端服务
+## 六、验证后端服务
 
-### 5.1 确认容器全部正常运行
+### 6.1 确认容器全部正常运行
 
 ```bash
 cd /opt/smart_nexus/backend/deploy/docker
@@ -234,22 +300,22 @@ mysql       Up
 redis       Up
 ```
 
-### 5.2 验证接口联通性
+### 6.2 验证接口联通性
 
 ```bash
-# 测试 knowledge 服务（根路径返回 {"detail":"Not Found"} 属正常，说明服务已启动）
-curl http://你的服务器IP/smart/nexus/knowledge/retrieval/query \
+# 测试 knowledge 服务
+curl https://你的域名.com/smart/nexus/knowledge/retrieval/query \
   -X POST -H "Content-Type: application/json" \
   -d '{"question":"测试","top_k":1}'
 
 # 测试 consultant 获取验证码接口
-curl -X POST http://你的服务器IP/smart/nexus/consultant/code \
+curl -X POST https://你的域名.com/smart/nexus/consultant/code \
   -H "Content-Type: application/json" \
   -d '{"user_phone":"13800000000"}'
 # 期望返回：{"status":"200",...}
 ```
 
-### 5.3 出错时查看日志
+### 6.3 出错时查看日志
 
 ```bash
 cd /opt/smart_nexus/backend/deploy/docker
@@ -260,92 +326,78 @@ docker compose logs -f mysql
 
 ---
 
-## 六、配置 HTTPS（可选但推荐）
+## 七、构建知识库
 
-### 6.1 申请 SSL 证书
+> 在**服务器**上执行，需要后端服务已正常运行。
 
-> 前提：域名 DNS 已解析到服务器 IP，且 80 端口可访问。
+知识库构建分两步：**爬取文档** → **向量化摄入**。爬取结果存放在持久化目录 `data/knowledge/crawl/`，摄入后写入 ChromaDB（`data/knowledge/chroma_kb/`），两步均通过 `docker compose exec` 在 knowledge 容器内运行。
 
-```bash
-sudo apt install -y certbot
+### 7.1 设置爬取范围
 
-# 暂停 nginx 释放 80 端口
-cd /opt/smart_nexus/backend/deploy/docker
-docker compose stop nginx
-
-# 申请证书
-sudo certbot certonly --standalone -d 你的域名.com
-
-# 重启 nginx
-docker compose start nginx
-```
-
-### 6.2 挂载证书
+爬取编号范围在代码中硬编码，**每次爬取前需先修改**：
 
 ```bash
-mkdir -p /opt/smart_nexus/backend/deploy/nginx/ssl
-sudo cp /etc/letsencrypt/live/你的域名.com/fullchain.pem \
-        /opt/smart_nexus/backend/deploy/nginx/ssl/
-sudo cp /etc/letsencrypt/live/你的域名.com/privkey.pem \
-        /opt/smart_nexus/backend/deploy/nginx/ssl/
+nano /opt/smart_nexus/backend/knowledge/cli/crawl_cli.py
 ```
 
-### 6.3 修改 nginx.conf 启用 HTTPS
+找到以下行，将 `range(0, 2000)` 改为实际需要爬取的编号区间：
 
-编辑 `backend/deploy/nginx/nginx.conf`：
-
-1. **取消注释 HTTP 跳转块**：
-```nginx
-server {
-    listen 80;
-    server_name 你的域名.com;
-    return 301 https://$host$request_uri;
-}
+```python
+for i in range(0, 2000):   # ← 修改起止编号（首次全量建库建议 0~2000）
 ```
 
-2. **将原来的 `listen 80;` 替换为**：
-```nginx
-listen 443 ssl;
-server_name 你的域名.com;
-ssl_certificate     /etc/nginx/ssl/fullchain.pem;
-ssl_certificate_key /etc/nginx/ssl/privkey.pem;
-```
+> 说明：编号对应 Lenovo iKnow 知识条目序号，不连续的编号会自动跳过（返回空则跳过）。
 
-### 6.4 取消 docker-compose.yml 中 SSL 目录的注释
-
-编辑 `backend/deploy/docker/docker-compose.yml`，找到 nginx 服务的 volumes 块，取消注释：
-
-```yaml
-volumes:
-  - ../nginx/nginx.conf:/etc/nginx/nginx.conf
-  - ../nginx/ssl:/etc/nginx/ssl   # ← 取消这行的注释
-```
-
-### 6.5 重建并重启 Nginx
-
-> 注意：修改了 `volumes` 配置后必须用 `--force-recreate` 重建容器，单纯 `restart` 不会重新挂载目录。
+### 7.2 执行爬取
 
 ```bash
 cd /opt/smart_nexus/backend/deploy/docker
-docker compose up -d --force-recreate nginx
+docker compose exec knowledge python -m cli.crawl_cli
 ```
 
-### 6.6 设置证书自动续签
+爬取过程中会实时打印日志，每爬一条休眠 0.2 秒；连续失败 5 次自动暂停 60 秒等待服务端恢复。全量 2000 条约需 **15～30 分钟**。
+
+爬取完成后，文件保存在服务器的 `/opt/smart_nexus/data/knowledge/crawl/` 目录下，命名格式为 `{编号:04d}_{标题}.md`。
+
+### 7.3 构建向量知识库（摄入）
+
+爬取完成后执行摄入，将 Markdown 文件向量化写入 ChromaDB：
 
 ```bash
-(crontab -l 2>/dev/null; echo "0 3 1 * * certbot renew --quiet && \
-  cp /etc/letsencrypt/live/你的域名.com/fullchain.pem /opt/smart_nexus/backend/deploy/nginx/ssl/ && \
-  cp /etc/letsencrypt/live/你的域名.com/privkey.pem /opt/smart_nexus/backend/deploy/nginx/ssl/ && \
-  docker compose -f /opt/smart_nexus/backend/deploy/docker/docker-compose.yml restart nginx") | crontab -
+cd /opt/smart_nexus/backend/deploy/docker
+docker compose exec knowledge python -m cli.ingestion_cli
 ```
+
+摄入过程显示进度条，格式为 `知识库上传进度: X%|... 成功块数: N 失败批次: M`。
+
+> **注意**：
+> - 重复执行摄入不会清空旧数据，会追加写入。如需重建，先手动清空 ChromaDB 目录（见下方命令）。
+> - 摄入的是 `data/knowledge/crawl/` 下的所有 `.md` 文件，包括历史爬取结果。
+
+**重建知识库（清空后重新摄入）：**
+
+```bash
+# ⚠️ 以下操作会清除全部向量数据，需重新摄入
+rm -rf /opt/smart_nexus/data/knowledge/chroma_kb/*
+cd /opt/smart_nexus/backend/deploy/docker
+docker compose exec knowledge python -m cli.ingestion_cli
+```
+
+### 7.4 增量更新
+
+如需追加新的知识条目（如已爬取 0\~999，现在追加 1000\~1999）：
+
+1. 修改 `crawl_cli.py` 中 `range` 改为 `range(1000, 2000)`
+2. 重新执行爬取（新文件保存到 `crawl/` 目录，不覆盖旧文件）
+3. 重新执行摄入（已向量化的内容会基于文件哈希自动去重，只追加新内容）
 
 ---
 
-## 七、打包前端 Electron 客户端
+## 八、打包前端 Electron 客户端
 
 > 在**本地 Windows 开发机**上执行，不是服务器。
 
-### 7.0 前端 API 配置说明
+### 8.0 前端 API 配置说明（`config.json` vs `.env`）
 
 前端有两套独立的 API 地址配置，用途不同，**不要混淆**：
 
@@ -358,7 +410,7 @@ docker compose up -d --force-recreate nginx
 - **测试后端联通性**（`npm run dev`）→ 修改 `front/.env` 中的 `VITE_API_TARGET` / `VITE_CONSULTANT_TARGET`
 - **打包 Electron 客户端** → 修改 `front/config.json`
 
-### 7.1 修改 config.json 指向云服务器
+### 8.1 修改 config.json 指向云服务器
 
 编辑 `front/config.json`：
 
@@ -371,7 +423,7 @@ docker compose up -d --force-recreate nginx
 
 如已配置 HTTPS 则使用 `https://你的域名.com/...`。
 
-### 7.2 打包
+### 8.2 打包
 
 ```bash
 cd front
@@ -381,13 +433,13 @@ npm run electron:build
 
 打包完成后，安装包位于 `front/electron-dist/` 目录下（`.exe` 安装程序）。
 
-### 7.3 说明：用户如何切换服务器地址
+### 8.3 说明：用户如何切换服务器地址
 
 用户安装完成后，如需更换服务器地址，只需修改**安装目录根目录**下的 `config.json`，无需重新安装客户端。
 
 ---
 
-## 八、前后端联通验证
+## 九、前后端联通验证
 
 1. 安装并打开 Electron 客户端，进入登录页
 2. 输入手机号，点击「获取验证码」，在服务器日志中确认收到请求：
@@ -399,7 +451,9 @@ npm run electron:build
 
 ---
 
-## 九、日常运维
+## 十、日常运维与更新发布
+
+### 10.1 常用运维命令
 
 ```bash
 # 工作目录（以下命令均在此目录执行）
@@ -419,20 +473,62 @@ docker compose restart consultant
 # 重建某个服务（修改了 volumes / 环境变量后使用）
 docker compose up -d --force-recreate consultant
 
-# 更新代码后重新部署
-cd /opt/smart_nexus && git pull
-bash backend/deploy/cmd/deploy.sh
-
 # 停止所有服务
-cd /opt/smart_nexus/backend/deploy/docker && docker compose down
+docker compose down
 
 # 停止并清除数据卷（⚠️ 数据库数据会丢失）
 docker compose down -v
 ```
 
+### 10.2 后端代码更新发布
+
+**步骤 1：拉取最新代码**
+
+```bash
+cd /opt/smart_nexus
+git pull
+```
+
+**步骤 2：重新构建并启动容器**
+
+```bash
+# 方式 A：全量重新部署（推荐，适用于任何改动）
+bash backend/deploy/cmd/deploy.sh
+
+# 方式 B：仅重建指定服务（改动范围明确时使用，速度更快）
+cd backend/deploy/docker
+docker compose up -d --build knowledge    # 仅更新 knowledge
+docker compose up -d --build consultant   # 仅更新 consultant
+```
+
+> **选哪种方式**：
+> - 修改了 Python 代码或 `requirements.txt` → 方式 A 或方式 B，`--build` 会重建镜像并自动重建容器，无需额外操作
+> - 只修改了 `.env` 配置（代码无变化）→ 方式 B 加 `--force-recreate`（镜像未变，需强制重建容器使新环境变量生效）
+> - 修改了 `docker-compose.yml` 的 volumes / ports → 用方式 B 加 `--force-recreate`（方式 A 的 `deploy.sh` 不带该参数，无法生效）
+
+**修改了环境变量（`.env`）后重启：**
+
+```bash
+cd /opt/smart_nexus/backend/deploy/docker
+docker compose up -d --force-recreate consultant
+```
+
+### 10.3 前端客户端更新发布
+
+前端是 Electron 桌面客户端，更新需要重新打包并分发安装包。在**本地 Windows 开发机**上执行：
+
+```bash
+cd front
+npm run electron:build
+```
+
+打包完成后将 `front/electron-dist/` 下的 `.exe` 安装程序发给用户重新安装。
+
+> 若只修改了服务器地址（`config.json`），用户也可直接替换安装目录下的 `config.json`，无需重装。
+
 ---
 
-## 十、常见问题排错
+## 十一、常见问题排错
 
 ### consultant 启动报 `Connection refused`（MySQL）
 
@@ -471,7 +567,7 @@ docker compose restart consultant
 
 ### Nginx 重启后证书报错 `No such file`
 
-nginx 容器内看不到证书，原因是 `docker-compose.yml` 中 SSL 目录挂载未取消注释。参考第六章 6.4 节，取消注释后必须用 `--force-recreate` 重建（不能用 `restart`）：
+nginx 容器内看不到证书，通常是证书文件未复制到 `nginx/ssl/` 目录。参考第三章 3.3 节重新挂载证书，然后重建 nginx 容器：
 
 ```bash
 cd /opt/smart_nexus/backend/deploy/docker
