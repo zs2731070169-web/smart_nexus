@@ -20,16 +20,25 @@ class Crawler:
         :return:
         """
         parser = Parser()
+        consecutive_failures = 0  # 连续失败计数，用于判断是否触发反爬限制
 
-        for i in range(1313, 1337):
+        for i in range(0, 2000):
             # 爬取数据
             content = KnowledgeCrawler.crawl_client(knowledge_no=str(i))
 
             # 文件不存在就跳过
             if not content:
-                logger.warning(f"第 {i} 个文件爬取失败，内容为空，暂停爬取，等待3秒后再次尝试...")
-                time.sleep(3)
+                consecutive_failures += 1
+                if consecutive_failures >= 5:
+                    # 连续多次失败，可能触发了反爬，等待更长时间
+                    logger.warning(f"连续失败 {consecutive_failures} 次，暂停 60s 等待服务端恢复...")
+                    time.sleep(60)
+                    consecutive_failures = 0
+                else:
+                    logger.warning(f"第 {i} 个文件内容为空，跳过")
                 continue
+
+            consecutive_failures = 0  # 成功则重置计数器
 
             # 标题不存在就跳过
             if not content.get('title'):
