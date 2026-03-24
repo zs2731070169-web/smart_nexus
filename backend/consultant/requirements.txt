@@ -8,3 +8,4 @@ httpx
 openai-agents
 pystun3
 redis
+orjson
