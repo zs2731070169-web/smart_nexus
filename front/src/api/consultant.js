@@ -1,4 +1,3 @@
-import axios from 'axios'
 import {consultantRequest} from './request'
 
 /**
@@ -38,18 +37,6 @@ export const queryChatHistory = async () => {
     return consultantRequest.post('/query_chat_history')
 }
 
-// 公网 IP 缓存（整个会话只查询一次，失败时降级为空字符串由后端兜底）
-let _cachedIpPromise = null
-
-const fetchPublicIp = () => {
-    if (!_cachedIpPromise) {
-        _cachedIpPromise = axios.get('https://api.ipify.org', {params: {format: 'json'}})
-            .then(r => r.data.ip || '')
-            .catch(() => '')
-    }
-    return _cachedIpPromise
-}
-
 /**
  * 流式对话（Server-Sent Events）
  * axios 通过 onDownloadProgress 回调读取 XHR responseText 增量实现 SSE 消费。
@@ -58,9 +45,6 @@ const fetchPublicIp = () => {
  * @yields {Object} StreamMessages 数据帧
  */
 export async function* streamChat(query, sessionId) {
-    const ip = await fetchPublicIp()
-    console.log(ip)
-
     let processedLength = 0
     const pendingEvents = []
     let streamDone = false
@@ -69,7 +53,7 @@ export async function* streamChat(query, sessionId) {
 
     const axiosPromise = consultantRequest.post(
         '/chat',
-        {query, session_id: sessionId, ip},
+        {query, session_id: sessionId},
         {
             responseType: 'text', // 禁止 axios 尝试 JSON 解析 SSE 流
             onDownloadProgress(evt) {
