@@ -1,5 +1,5 @@
 {
-  "consultantBase": "http://127.0.0.1:8001/smart/nexus/consultant",
-  "knowledgeBase": "http://127.0.0.1:8000/smart/nexus/knowledge"
+  "consultantBase": "https://www.apidev-app.com/smart/nexus/consultant",
+  "knowledgeBase": "https://www.apidev-app.com/smart/nexus/knowledge"
 }
 
