@@ -26,8 +26,8 @@ step()  { echo -e "\n${BLUE}==============================${NC}\n${BLUE} $1 ${NC
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_DIR="$SCRIPT_DIR/.."           # backend/deploy/
 DOCKER_DIR="$DEPLOY_DIR/docker"       # backend/deploy/docker/
-KNOWLEDGE_ENV="$DEPLOY_DIR/../../knowledge/.env"    # backend/knowledge/.env
-CONSULTANT_ENV="$DEPLOY_DIR/../../consultant/.env"  # backend/consultant/.env
+KNOWLEDGE_ENV="$DEPLOY_DIR/../knowledge/.env"    # backend/knowledge/.env
+CONSULTANT_ENV="$DEPLOY_DIR/../consultant/.env"  # backend/consultant/.env
 NGINX_CONF="$DEPLOY_DIR/nginx/nginx.conf"           # backend/deploy/nginx/nginx.conf
 DATA_DIR="$DEPLOY_DIR/../../data"     # backend/data/
 
