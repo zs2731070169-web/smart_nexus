@@ -36,7 +36,7 @@ services:
       - ../../../data/mysql:/var/lib/mysql
       - ../db/smart_nexus.sql:/docker-entrypoint-initdb.d/smart_nexus.sql  # 首次启动自动初始化
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--connect-timeout=3"]
       interval: 5s
       timeout: 5s
       retries: 12
