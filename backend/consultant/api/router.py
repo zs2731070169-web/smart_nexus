@@ -16,15 +16,21 @@ def _get_client_ip(request: Request) -> str:
     forwarded_for = request.headers.get("X-Forwarded-For")
     if forwarded_for:
         # 从请求链路的ip列表里获取第一个ip（用户真实的原始ip）
-        return forwarded_for.split(",")[0].strip()
+        ip = forwarded_for.split(",")[0].strip()
+        log.info(f"从 X-Forwarded-For 获取到客户端 IP: {ip}，原始 X-Forwarded-For 头: {forwarded_for}")
+        return ip
 
     real_ip = request.headers.get("X-Real-IP")
     if real_ip:
         # 获取上一跳ip，如果是用户直连就是用户真实ip
-        return real_ip.strip()
+        ip = real_ip.strip()
+        log.info(f"从 X-Real-IP 获取到客户端 IP: {ip}，原始 X-Real-IP 头: {real_ip}")
+        return ip
 
     # 获取直接访问FastAPI进程的那个客户端的ip（本地：127.0.0.1，服务器：内网ip）
-    return request.client.host if request.client else ""
+    ip = request.client.host if request.client else ""
+    log.info(f"从 request.client 直接获取到客户端 IP: {ip}")
+    return ip
 
 
 def _ensure_user_id(request: Request) -> Response:
