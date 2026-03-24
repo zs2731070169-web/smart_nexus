@@ -81,15 +81,7 @@ fi
 
 [ -z "$MYSQL_ROOT_PASSWORD" ] && error "MySQL 密码不能为空"
 
-export MYSQL_ROOT_PASSWORD # 导出为环境变量，子进程可读
-
-# 同时写入 docker/.env，确保 docker compose 变量替换时能读到（export 有时在子 shell 中失效）
-DOCKER_ENV_FILE="$DOCKER_DIR/.env"
-if grep -q '^MYSQL_ROOT_PASSWORD=' "$DOCKER_ENV_FILE" 2>/dev/null; then
-    sed -i "s|^MYSQL_ROOT_PASSWORD=.*|MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD|" "$DOCKER_ENV_FILE"
-else
-    echo "MYSQL_ROOT_PASSWORD=$MYSQL_ROOT_PASSWORD" >> "$DOCKER_ENV_FILE"
-fi
+export MYSQL_ROOT_PASSWORD # 导出为环境变量，这样后续执行的任何子进程（主要是 docker compose up）都能读取到这个值，确保容器在启动时获得正确的密码
 info "MySQL 密码已加载 ✓"
 
 # ============================================================
