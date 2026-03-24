@@ -147,7 +147,7 @@ SUB_MODEL_NAME=qwen3.5-flash
 MYSQL_HOST=mysql
 MYSQL_PORT=3306
 MYSQL_USER=root
-MYSQL_PASSWORD=设置一个强密码（与后续 docker compose 使用同一个）
+MYSQL_PASSWORD=设置一个强密码（与后续 docker compose 使用同一个，密码中不要包含 $ 符号）
 MYSQL_DATABASE=smart_nexus
 MYSQL_CHARSET=utf8mb4
 MYSQL_CONNECT_TIMEOUT=10
@@ -190,6 +190,8 @@ bash backend/deploy/cmd/deploy.sh
 
 脚本从 `consultant/.env` 的 `MYSQL_PASSWORD` 自动读取 MySQL root 密码，无需手动输入。
 
+> **首次部署说明**：MySQL 容器首次启动时会自动执行 `smart_nexus.sql` 初始化数据库，耗时约 1～2 分钟。此期间 consultant 容器会等待 MySQL 健康检查通过后再启动，属正常现象。
+
 **正常完成示例：**
 
 ```
@@ -229,13 +231,15 @@ redis       Up
 ### 5.2 验证接口联通性
 
 ```bash
-# 测试 knowledge 服务
-curl http://你的服务器IP/smart/nexus/knowledge/
+# 测试 knowledge 服务（根路径返回 {"detail":"Not Found"} 属正常，说明服务已启动）
+curl http://你的服务器IP/smart/nexus/knowledge/retrieval/query \
+  -X POST -H "Content-Type: application/json" \
+  -d '{"question":"测试","top_k":1}'
 
 # 测试 consultant 获取验证码接口
 curl -X POST http://你的服务器IP/smart/nexus/consultant/code \
   -H "Content-Type: application/json" \
-  -d '{"phone":"13800000000"}'
+  -d '{"user_phone":"13800000000"}'
 # 期望返回：{"status":"200",...}
 ```
 
@@ -419,13 +423,13 @@ smart_nexus/
       Dockerfile
       .env.example               # 配置模板
       .env                       # 服务器上手动创建，不进 git
-    data/                        # 持久化数据（deploy.sh 自动创建，不进 git）
-      knowledge/chroma_kb/       # ChromaDB 向量库
-      knowledge/crawl/           # 爬虫输出
-      consultant/log/            # 运行日志
-      consultant/history/        # 对话历史
-      mysql/                     # MySQL 数据
-      redis/                     # Redis 数据
+  data/                          # 持久化数据（deploy.sh 自动创建，不进 git）
+    knowledge/chroma_kb/         # ChromaDB 向量库
+    knowledge/crawl/             # 爬虫输出
+    consultant/log/              # 运行日志
+    consultant/history/          # 对话历史
+    mysql/                       # MySQL 数据
+    redis/                       # Redis 数据
   front/
     config.json                  # 服务器地址配置，随安装包分发
     electron-dist/               # 打包输出目录（.exe 安装程序）
