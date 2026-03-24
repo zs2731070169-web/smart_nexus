@@ -28,7 +28,7 @@ class KnowledgeCrawler:
                 content = json.loads(response.content)
                 return content.get('data', {})
             except (requests.ConnectionError, requests.Timeout) as e:
-                # 连接被断开或超时：重试，指数退避 5s/15s/45s
+                # 连接被断开或超时：3次重试，指数退避 5s/15s/45s 等待
                 if attempt < max_retries:
                     wait = 5 * (3 ** attempt)
                     logger.warning(f"连接异常（第 {attempt + 1} 次），{wait}s 后重试: {e}")
@@ -37,6 +37,6 @@ class KnowledgeCrawler:
                     logger.error(f"连接异常，已达最大重试次数，跳过 {knowledge_no}: {e}")
                     return {}
             except Exception as e:
-                # 其他错误（HTTP 错误、JSON 解析失败等）不重试
+                # 其他错误（HTTP 错误、JSON 解析失败等）不重试，直接跳过
                 logger.error(f"HTTP请求失败: {e}")
                 return {}
