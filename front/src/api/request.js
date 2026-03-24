@@ -47,6 +47,10 @@ consultantRequest.interceptors.response.use(
       ElMessage.error('请求超时，请稍后重试')
     } else if (!error.response) {
       ElMessage.error('网络连接失败，请检查服务是否启动')
+    } else if (error.response.status === 401) {
+        const authStore = useAuthStore()
+        authStore.clearAuth()
+        ElMessage.warning('登录已过期，请重新登录')
     } else {
       ElMessage.error('服务器异常，请稍后重试')
     }

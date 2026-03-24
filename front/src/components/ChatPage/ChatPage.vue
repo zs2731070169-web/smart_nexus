@@ -1,9 +1,10 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
-import { useAuthStore } from '../../store/auth'
+import {ref, watch, onMounted} from 'vue'
+import {useAuthStore} from '../../store/auth'
+import { Loading } from '@element-plus/icons-vue'
 
 const authStore = useAuthStore()
-import { userLogout, queryChatHistory, deleteChatHistory } from '../../api/consultant'
+import {userLogout, queryChatHistory, deleteChatHistory} from '../../api/consultant'
 import SessionSidebar from './SessionSidebar.vue'
 import ChatWindow from './ChatWindow.vue'
 import UploadPanel from '../UploadPanel/UploadPanel.vue'
@@ -13,8 +14,11 @@ const LOCAL_SESSIONS_KEY = 'smart_nexus_local_sessions'
 const ACTIVE_SESSION_KEY = 'smart_nexus_active_session'
 
 const readLocalSessions = () => {
-  try { return JSON.parse(localStorage.getItem(LOCAL_SESSIONS_KEY) || '[]') }
-  catch { return [] }
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_SESSIONS_KEY) || '[]')
+  } catch {
+    return []
+  }
 }
 const writeLocalSessions = (list) => {
   localStorage.setItem(LOCAL_SESSIONS_KEY, JSON.stringify(list))
@@ -22,7 +26,7 @@ const writeLocalSessions = (list) => {
 
 // ===== 会话工厂 =====
 const createSession = (id = crypto.randomUUID(), title = '新对话', preloadedMessages = null) => {
-  return { id, title, preloadedMessages }
+  return {id, title, preloadedMessages}
 }
 
 const initialSession = createSession()
@@ -37,7 +41,7 @@ const createNewSession = () => {
   activeSessionId.value = session.id
   // 持久化到本地，刷新后可恢复
   const locals = readLocalSessions()
-  locals.unshift({ id: session.id, title: '新对话' })
+  locals.unshift({id: session.id, title: '新对话'})
   writeLocalSessions(locals)
 }
 
@@ -66,20 +70,20 @@ const updateSessionTitle = (title) => {
 
 // ===== 历史消息转换 =====
 const convertHistoryMessages = (historyList) =>
-  historyList.map((msg, i) => {
-    if (msg.role === 'user') {
-      return { id: `h${i}`, role: 'user', content: msg.content }
-    }
-    return {
-      id: `h${i}`,
-      role: 'assistant',
-      thinking: '',
-      processing: '',
-      answer: msg.content,
-      isStreaming: false,
-      thinkingExpanded: false
-    }
-  })
+    historyList.map((msg, i) => {
+      if (msg.role === 'user') {
+        return {id: `h${i}`, role: 'user', content: msg.content}
+      }
+      return {
+        id: `h${i}`,
+        role: 'assistant',
+        thinking: '',
+        processing: '',
+        answer: msg.content,
+        isStreaming: false,
+        thinkingExpanded: false
+      }
+    })
 
 // ===== 启动时加载历史 =====
 const loadHistoryOnStart = async () => {
@@ -100,7 +104,7 @@ const loadHistoryOnStart = async () => {
 
     if (justLoggedIn) {
       // 刚登录：把 initialSession 写入本地会话，确保刷新后仍保留
-      writeLocalSessions([{ id: initialSession.id, title: initialSession.title }])
+      writeLocalSessions([{id: initialSession.id, title: initialSession.title}])
       sessions.value = [initialSession, ...historySessions]
       activeSessionId.value = initialSession.id
       return
@@ -176,7 +180,10 @@ const deleteSession = async (sessionId) => {
 }
 
 // ===== 退出登录 =====
+const isLoggingOut = ref(false)
+
 const handleLogout = async () => {
+  if (isLoggingOut.value) return  // 防止重复触发
   try {
     await ElMessageBox.confirm('确认退出登录？', '退出确认', {
       confirmButtonText: '退出',
@@ -186,10 +193,21 @@ const handleLogout = async () => {
   } catch {
     return // 用户取消
   }
+
+  isLoggingOut.value = true
+
   try {
-    await userLogout()
-  } finally {
+    const res = await userLogout()
+    // 后端内部异常时仅提示推出失败
+    if (res?.status !== '200') {
+      ElMessage.error(res?.message || '退出失败，请稍后重试')
+      return
+    }
+    // 后端确认注销成功后清除本地登录态
     authStore.clearAuth()
+  } catch {
+    // 网络层异常（断网/超时），后端未执行，不能清除登录态
+    ElMessage.error('退出失败，请检查网络连接后重试')
   }
 }
 
@@ -202,36 +220,43 @@ onMounted(() => {
   <div class="chat-page">
     <!-- 左侧会话边栏 -->
     <SessionSidebar
-      :sessions="sessions"
-      :active-session-id="activeSessionId"
-      :user-phone="authStore.userPhone"
-      @new-session="createNewSession"
-      @select-session="switchSession"
-      @delete-session="deleteSession"
-      @open-upload="isUploadOpen = true"
+        :sessions="sessions"
+        :active-session-id="activeSessionId"
+        :user-phone="authStore.userPhone"
+        @new-session="createNewSession"
+        @select-session="switchSession"
+        @delete-session="deleteSession"
+        @open-upload="isUploadOpen = true"
     />
 
     <!-- 右侧对话窗口（v-show 保持组件挂载，防止切换时丢失进行中的对话状态） -->
     <ChatWindow
-      v-for="session in sessions"
-      v-show="session.id === activeSessionId"
-      :key="session.id"
-      :session-id="session.id"
-      :session-title="session.title"
-      :preloaded-messages="session.preloadedMessages"
-      @session-named="updateSessionTitle"
-      @logout="handleLogout"
+        v-for="session in sessions"
+        v-show="session.id === activeSessionId"
+        :key="session.id"
+        :session-id="session.id"
+        :session-title="session.title"
+        :preloaded-messages="session.preloadedMessages"
+        :is-logging-out="isLoggingOut"
+        @session-named="updateSessionTitle"
+        @logout="handleLogout"
     />
 
     <!-- 知识库管理抽屉 -->
     <el-drawer
-      v-model="isUploadOpen"
-      title="知识库文档管理"
-      direction="rtl"
-      size="380px"
+        v-model="isUploadOpen"
+        title="知识库文档管理"
+        direction="rtl"
+        size="380px"
     >
-      <UploadPanel />
+      <UploadPanel/>
     </el-drawer>
+
+    <!-- 退出中的全局遮罩，阻断所有交互 -->
+    <div v-if="isLoggingOut" class="logout-mask">
+      <el-icon class="spin-icon"><Loading /></el-icon>
+      <span class="text">正在退出，请稍候...</span>
+    </div>
   </div>
 </template>
 
@@ -240,5 +265,30 @@ onMounted(() => {
   display: flex;
   height: 100%;
   overflow: hidden;
+}
+
+.logout-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(2px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: #606266;
+  font-size: 14px;
+  z-index: 20;
+  pointer-events: all;  // 覆盖下层所有交互
+  .spin-icon {
+    font-size: 28px;
+    color: #409eff;
+    animation: spin 1s linear infinite;
+  }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 </style>

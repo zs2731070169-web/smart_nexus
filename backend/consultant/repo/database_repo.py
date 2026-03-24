@@ -91,7 +91,7 @@ class DatabaseRepo:
             sql = """
                 UPDATE user_login 
                 SET is_login = FALSE
-                WHERE id = %s
+                WHERE id = %s AND is_login = TRUE
             """
             await asyncio.to_thread(cursor.execute, sql, (user_id, ))
             log.info(f"用户注销成功，用户ID: {user_id}")

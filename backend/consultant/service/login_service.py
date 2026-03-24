@@ -60,12 +60,6 @@ class LoginService:
         # 电话号码验证
         self._valide_phone(user_phone)
 
-        # 获取已存在用户id
-        login_status = await database_repo.query_login_status(user_phone)
-
-        # 校验是否已经登陆过
-        if login_status and login_status.get('is_login') == '1': raise Exception("用户已登录，请勿重复登录")
-
         # 用户验证码非空校验
         if user_code is None or not user_code.strip(): raise Exception("登录失败，验证码不能为空")
 
@@ -80,6 +74,16 @@ class LoginService:
 
         # 删除验证码
         await redis_operation.delete_value(phone_code_key)
+
+        # 添加登录锁，防止短时间重复登录，30秒过期
+        # 同时允许合法的重复登陆，每次登录会更新login_time，生成新的token，此时旧token因 iat < login_time 自然失效，只能用最新token
+        lock_key = f"login_lock:{user_phone}"
+        if await redis_operation.exists_key(lock_key):
+            raise Exception("操作过于频繁，请稍后再试")
+        await redis_operation.save_with_ex(lock_key, "1", get_expire_datetime(delay_time(seconds=5)))
+
+        # 获取已存在用户id
+        login_status = await database_repo.query_login_status(user_phone)
 
         # 生成或获取用户ID
         user_id = login_status.get('id') if login_status else None
