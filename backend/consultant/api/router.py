@@ -106,7 +106,7 @@ async def consultant(chat_request: ChatRequest, request: Request) -> StreamingRe
     user_id = _ensure_user_id(request)
     query = chat_request.query
     session_id = chat_request.session_id
-    ip = _get_client_ip(request)
+    ip = chat_request.ip or _get_client_ip(request)
 
     log.info(f"用户咨询对话接口被调用，用户ID: {user_id}，会话ID: {session_id}，用户问题: {query}，用户ip：{ip}")
 

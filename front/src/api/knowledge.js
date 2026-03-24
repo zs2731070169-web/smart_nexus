@@ -1,4 +1,4 @@
-import { knowledgeRequest as request } from './request'
+import {knowledgeRequest as request} from './request'
 
 /**
  * 上传文件到知识库
@@ -6,9 +6,9 @@ import { knowledgeRequest as request } from './request'
  * @returns {Promise} 上传结果
  */
 export const uploadFile = (file) => {
-  const formData = new FormData()
-  formData.append('file', file)
-  return request.post('/injection/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
+    const formData = new FormData()
+    formData.append('file', file)
+    return request.post('/injection/upload', formData, {
+        headers: {'Content-Type': 'multipart/form-data'}
+    })
 }

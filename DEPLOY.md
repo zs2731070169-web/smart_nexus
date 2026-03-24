@@ -473,6 +473,12 @@ docker compose restart consultant
 # 重建某个服务（修改了 volumes / 环境变量后使用）
 docker compose up -d --force-recreate consultant
 
+# 更新 nginx.conf 后热重载（无需重建容器）
+docker compose exec nginx nginx -s reload
+
+# 验证 nginx 配置语法
+docker compose exec nginx nginx -t
+
 # 停止所有服务
 docker compose down
 
