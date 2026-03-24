@@ -1,19 +1,27 @@
 <script setup>
-import { ref, reactive, nextTick, onMounted, onUnmounted } from 'vue'
+import {computed, nextTick, onMounted, onUnmounted, reactive, ref} from 'vue'
 import {
-  ChatDotRound, Service, User, Loading, Aim,
-  ArrowDown, ArrowRight, CircleCheck, Promotion, SwitchButton
+  Aim,
+  ArrowDown,
+  ArrowRight,
+  ChatDotRound,
+  CircleCheck,
+  Loading,
+  Promotion,
+  Service,
+  SwitchButton,
+  User
 } from '@element-plus/icons-vue'
-import { marked } from 'marked'
-import { streamChat } from '../../api/consultant'
+import {marked} from 'marked'
+import {streamChat} from '../../api/consultant'
 
 // ===== Markdown 渲染配置 =====
 const IMAGE_URL_RE = /\.(png|jpe?g|gif|webp|svg|bmp)(\?[^\s)]*)?$/i
 
-marked.setOptions({ breaks: true, gfm: true })
+marked.setOptions({breaks: true, gfm: true})
 marked.use({
   renderer: {
-    link({ href, title, text }) {
+    link({href, title, text}) {
       if (href && IMAGE_URL_RE.test(href)) {
         return `<img src="${href}" alt="${text || title || '图片'}" class="chat-img" />`
       }
@@ -24,9 +32,10 @@ marked.use({
 
 // ===== Props / Emits =====
 const props = defineProps({
-  sessionId: { type: String, required: true },
-  sessionTitle: { type: String, default: '新对话' },
-  preloadedMessages: { type: Array, default: null }
+  sessionId: {type: String, required: true},
+  sessionTitle: {type: String, default: '新对话'},
+  preloadedMessages: {type: Array, default: null},
+  userPhone: { type: String, default: '' }
 })
 
 const emit = defineEmits(['session-named', 'logout'])
@@ -43,7 +52,7 @@ const QUICK_HINTS = [
 let msgIdCounter = 0
 
 const createUserMessage = (content) => {
-  return { id: ++msgIdCounter, role: 'user', content }
+  return {id: ++msgIdCounter, role: 'user', content}
 }
 
 const createAiMessage = () => {
@@ -72,20 +81,22 @@ const initMessages = () => {
       const parsed = JSON.parse(saved)
       // AI 消息还原为 reactive 对象，isStreaming 统一重置为 false
       return parsed.map(msg =>
-        msg.role === 'assistant'
-          ? reactive({ ...msg, isStreaming: false })
-          : msg
+          msg.role === 'assistant'
+              ? reactive({...msg, isStreaming: false})
+              : msg
       )
     }
-  } catch { /* 解析失败则忽略，使用默认值 */ }
-  return props.preloadedMessages?.map(msg => ({ ...msg })) ?? []
+  } catch { /* 解析失败则忽略，使用默认值 */
+  }
+  return props.preloadedMessages?.map(msg => ({...msg})) ?? []
 }
 
 /** 将当前消息快照写入 sessionStorage */
 const saveMessages = () => {
   try {
     sessionStorage.setItem(STORAGE_KEY, JSON.stringify(messages.value))
-  } catch { /* 存储失败忽略（如隐私模式或空间不足） */ }
+  } catch { /* 存储失败忽略（如隐私模式或空间不足） */
+  }
 }
 
 // ===== 状态 =====
@@ -143,7 +154,7 @@ const sendMessage = async () => {
 
   try {
     for await (const event of streamChat(query, props.sessionId)) {
-      const { data, status, metadata } = event
+      const {data, status, metadata} = event
 
       if (status === 'FINISHED') {
         const reason = metadata?.finished_reason
@@ -159,7 +170,7 @@ const sendMessage = async () => {
 
       if (data?.message_type !== 'delta') continue
 
-      const { render_type, data: text } = data
+      const {render_type, data: text} = data
       if (render_type === 'THINKING') {
         aiMsg.thinking += text
       } else if (render_type === 'PROCESSING') {
@@ -190,6 +201,11 @@ onUnmounted(() => {
   saveMessages() // 切换会话时保存当前消息状态
   isStreaming.value = false
 })
+
+
+const maskedPhone = computed(() =>
+  props.userPhone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+)
 </script>
 
 <template>
@@ -197,32 +213,49 @@ onUnmounted(() => {
     <!-- 顶部标题栏 -->
     <div class="window-header">
       <div class="header-title">
-        <el-icon><ChatDotRound /></el-icon>
+        <el-icon>
+          <ChatDotRound/>
+        </el-icon>
         <span>{{ sessionTitle }}</span>
       </div>
       <div v-if="isStreaming" class="header-status">
-        <el-icon class="spin-icon"><Loading /></el-icon>
+        <el-icon class="spin-icon">
+          <Loading/>
+        </el-icon>
         <span>AI 正在思考...</span>
       </div>
-      <el-button class="logout-btn" size="small" text @click="$emit('logout')">
-        <el-icon><SwitchButton /></el-icon>
-        退出
-      </el-button>
+      <!-- 用户信息 -->
+      <div class="sidebar-user">
+        <div class="user-info">
+          <el-icon>
+            <User/>
+          </el-icon>
+          <span class="user-phone">{{ maskedPhone }}</span>
+          <el-button class="logout-btn" size="small" text @click="$emit('logout')">
+            <el-icon>
+              <SwitchButton/>
+            </el-icon>
+            退出
+          </el-button>
+        </div>
+      </div>
     </div>
 
     <!-- 消息区 -->
     <div class="message-list" ref="messageListRef" @scroll="onMessageListScroll">
       <!-- 欢迎屏（空状态） -->
       <div v-if="messages.length === 0" class="welcome-screen">
-        <el-icon class="welcome-icon"><Service /></el-icon>
+        <el-icon class="welcome-icon">
+          <Service/>
+        </el-icon>
         <h2 class="welcome-title">您好，我是 Smart Nexus 智能顾问</h2>
         <p class="welcome-desc">专注于电脑、手机、电视等设备的售后技术支持</p>
         <div class="quick-hints">
           <div
-            v-for="hint in QUICK_HINTS"
-            :key="hint"
-            class="hint-chip"
-            @click="fillInput(hint)"
+              v-for="hint in QUICK_HINTS"
+              :key="hint"
+              class="hint-chip"
+              @click="fillInput(hint)"
           >
             {{ hint }}
           </div>
@@ -234,7 +267,9 @@ onUnmounted(() => {
         <!-- 用户消息 -->
         <div v-if="msg.role === 'user'" class="msg-row user-row">
           <div class="msg-avatar user-avatar">
-            <el-icon><User /></el-icon>
+            <el-icon>
+              <User/>
+            </el-icon>
           </div>
           <div class="msg-bubble user-bubble">{{ msg.content }}</div>
         </div>
@@ -242,20 +277,24 @@ onUnmounted(() => {
         <!-- AI 消息 -->
         <div v-else class="msg-row ai-row">
           <div class="msg-avatar ai-avatar">
-            <el-icon><Service /></el-icon>
+            <el-icon>
+              <Service/>
+            </el-icon>
           </div>
           <div class="msg-body">
             <!-- 推理思考（THINKING） -->
             <div v-if="msg.thinking" class="thinking-block">
               <div
-                class="thinking-header"
-                @click="msg.thinkingExpanded = !msg.thinkingExpanded"
+                  class="thinking-header"
+                  @click="msg.thinkingExpanded = !msg.thinkingExpanded"
               >
-                <el-icon><Aim /></el-icon>
+                <el-icon>
+                  <Aim/>
+                </el-icon>
                 <span>推理过程</span>
                 <el-icon class="toggle-icon">
-                  <ArrowDown v-if="msg.thinkingExpanded" />
-                  <ArrowRight v-else />
+                  <ArrowDown v-if="msg.thinkingExpanded"/>
+                  <ArrowRight v-else/>
                 </el-icon>
               </div>
               <div v-show="msg.thinkingExpanded" class="thinking-body">
@@ -266,23 +305,23 @@ onUnmounted(() => {
             <!-- 过程处理（PROCESSING） -->
             <div v-if="msg.processing" class="processing-block">
               <el-icon :class="{ 'spin-icon': msg.isStreaming && !msg.answer }">
-                <Loading v-if="msg.isStreaming && !msg.answer" />
-                <CircleCheck v-else />
+                <Loading v-if="msg.isStreaming && !msg.answer"/>
+                <CircleCheck v-else/>
               </el-icon>
               <span class="processing-text">{{ msg.processing }}</span>
             </div>
 
             <!-- 最终回答（ANSWER） -->
             <div
-              v-if="msg.answer"
-              class="answer-block markdown-body"
-              v-html="renderMarkdown(msg.answer)"
+                v-if="msg.answer"
+                class="answer-block markdown-body"
+                v-html="renderMarkdown(msg.answer)"
             ></div>
 
             <!-- 流式初始占位 -->
             <div
-              v-if="msg.isStreaming && !msg.thinking && !msg.processing && !msg.answer"
-              class="typing-dots"
+                v-if="msg.isStreaming && !msg.thinking && !msg.processing && !msg.answer"
+                class="typing-dots"
             >
               <span></span><span></span><span></span>
             </div>
@@ -295,21 +334,21 @@ onUnmounted(() => {
     <div class="input-area">
       <div class="input-wrapper">
         <el-input
-          ref="inputRef"
-          v-model="inputText"
-          type="textarea"
-          :autosize="{ minRows: 1, maxRows: 5 }"
-          placeholder="请输入您的问题...（Enter 发送，Shift+Enter 换行）"
-          resize="none"
-          :disabled="isStreaming"
-          @keydown.enter.exact.prevent="sendMessage"
+            ref="inputRef"
+            v-model="inputText"
+            type="textarea"
+            :autosize="{ minRows: 1, maxRows: 5 }"
+            placeholder="请输入您的问题...（Enter 发送，Shift+Enter 换行）"
+            resize="none"
+            :disabled="isStreaming"
+            @keydown.enter.exact.prevent="sendMessage"
         />
         <el-button
-          type="primary"
-          :icon="Promotion"
-          :disabled="!inputText.trim() || isStreaming"
-          class="send-btn"
-          @click="sendMessage"
+            type="primary"
+            :icon="Promotion"
+            :disabled="!inputText.trim() || isStreaming"
+            class="send-btn"
+            @click="sendMessage"
         >
           发送
         </el-button>
@@ -365,14 +404,35 @@ $bg-white: #fff;
       color: $text-hint;
     }
 
-    .logout-btn {
-      color: rgb(33, 33, 33) !important;
-      font-size: 12px;
-      padding: 4px 8px;
+    // 用户信息
+    .sidebar-user {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
 
-      &:hover {
-        color: #f56c6c !important;
-        background: rgba(245, 108, 108, 0.08) !important;
+      .user-info {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        color: $text-hint;
+
+        .user-phone {
+          font-family: 'Courier New', monospace;
+          letter-spacing: 0.5px;
+        }
+
+        .logout-btn {
+          color: rgb(33, 33, 33) !important;
+          font-size: 12px;
+          padding: 4px 8px;
+
+          &:hover {
+            color: #f56c6c !important;
+            background: rgba(245, 108, 108, 0.08) !important;
+          }
+        }
       }
     }
   }
@@ -595,8 +655,13 @@ $bg-white: #fff;
             background: $primary;
             animation: typing-bounce 1.4s ease-in-out infinite;
 
-            &:nth-child(2) { animation-delay: 0.2s; }
-            &:nth-child(3) { animation-delay: 0.4s; }
+            &:nth-child(2) {
+              animation-delay: 0.2s;
+            }
+
+            &:nth-child(3) {
+              animation-delay: 0.4s;
+            }
           }
         }
       }
@@ -634,11 +699,26 @@ $bg-white: #fff;
 
 // Markdown 内容样式
 .markdown-body {
-  :deep(p) { margin: 0 0 8px; }
-  :deep(p:last-child) { margin-bottom: 0; }
-  :deep(ul), :deep(ol) { margin: 4px 0 8px; padding-left: 20px; }
-  :deep(li) { margin-bottom: 3px; }
-  :deep(strong) { font-weight: 600; }
+  :deep(p) {
+    margin: 0 0 8px;
+  }
+
+  :deep(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  :deep(ul), :deep(ol) {
+    margin: 4px 0 8px;
+    padding-left: 20px;
+  }
+
+  :deep(li) {
+    margin-bottom: 3px;
+  }
+
+  :deep(strong) {
+    font-weight: 600;
+  }
 
   :deep(code) {
     background: #f0f2f5;
@@ -688,7 +768,10 @@ $bg-white: #fff;
     text-align: left;
   }
 
-  :deep(th) { background: #f5f7fa; font-weight: 600; }
+  :deep(th) {
+    background: #f5f7fa;
+    font-weight: 600;
+  }
 
   :deep(.chat-img) {
     max-width: 100%;
@@ -704,12 +787,22 @@ $bg-white: #fff;
 }
 
 @keyframes typing-bounce {
-  0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
-  30% { opacity: 1; transform: scale(1); }
+  0%, 60%, 100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

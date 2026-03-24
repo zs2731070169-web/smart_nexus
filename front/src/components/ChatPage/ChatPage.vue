@@ -222,7 +222,6 @@ onMounted(() => {
     <SessionSidebar
         :sessions="sessions"
         :active-session-id="activeSessionId"
-        :user-phone="authStore.userPhone"
         @new-session="createNewSession"
         @select-session="switchSession"
         @delete-session="deleteSession"
@@ -238,6 +237,7 @@ onMounted(() => {
         :session-title="session.title"
         :preloaded-messages="session.preloadedMessages"
         :is-logging-out="isLoggingOut"
+        :user-phone="authStore.userPhone"
         @session-named="updateSessionTitle"
         @logout="handleLogout"
     />

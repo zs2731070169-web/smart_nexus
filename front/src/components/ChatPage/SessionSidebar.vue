@@ -4,17 +4,12 @@ import {
   Monitor, Plus, ChatDotRound, Clock, FolderAdd, User, SwitchButton, Delete
 } from '@element-plus/icons-vue'
 
-const props = defineProps({
+defineProps({
   sessions: { type: Array, required: true },
   activeSessionId: { type: String, required: true },
-  userPhone: { type: String, default: '' }
 })
 
 defineEmits(['new-session', 'select-session', 'delete-session', 'open-history', 'open-upload'])
-
-const maskedPhone = computed(() =>
-  props.userPhone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
-)
 </script>
 
 <template>
@@ -57,15 +52,6 @@ const maskedPhone = computed(() =>
         <el-icon><FolderAdd /></el-icon>
         <span>知识库管理</span>
       </div>
-    </div>
-
-    <!-- 用户信息 -->
-    <div class="sidebar-user">
-      <div class="user-info">
-        <el-icon><User /></el-icon>
-        <span class="user-phone">{{ maskedPhone }}</span>
-      </div>
-
     </div>
   </aside>
 </template>
@@ -226,28 +212,6 @@ $text-hint: #909399;
 
       .el-icon {
         font-size: 15px;
-      }
-    }
-  }
-
-  // 用户信息
-  .sidebar-user {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px 14px;
-    border-top: 1px solid $border;
-
-    .user-info {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 13px;
-      color: $text-hint;
-
-      .user-phone {
-        font-family: 'Courier New', monospace;
-        letter-spacing: 0.5px;
       }
     }
   }
