@@ -21,16 +21,26 @@ services:
     volumes:
       - ../../data/consultant/log:/app/log          # 日志持久化
       - ../../data/consultant/history:/app/history  # 对话历史持久化
-    depends_on: [mysql, redis]
+    depends_on:
+      mysql:
+        condition: service_healthy  # 等 MySQL 健康检查通过再启动
+      redis:
+        condition: service_started
 
   mysql:
     image: mysql:9
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}  # 从服务器 .env 读取，禁止硬编码
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}  # 从 docker/.env 读取，禁止硬编码
       MYSQL_DATABASE: smart_nexus
     volumes:
       - ../../data/mysql:/var/lib/mysql
       - ../db/smart_nexus.sql:/docker-entrypoint-initdb.d/smart_nexus.sql  # 首次启动自动初始化
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${MYSQL_ROOT_PASSWORD}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s  # 给 MySQL 初始化预留时间
 
   redis:
     image: redis:7-alpine
