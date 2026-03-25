@@ -20,12 +20,12 @@ def _get_client_ip(request: Request) -> str:
         log.info(f"从 X-Forwarded-For 获取到客户端 IP: {ip}，原始 X-Forwarded-For 头: {forwarded_for}")
         return ip
 
-    # real_ip = request.headers.get("X-Real-IP")
-    # if real_ip:
-    #     # 获取上一跳ip，如果是用户直连就是用户真实ip
-    #     ip = real_ip.strip()
-    #     log.info(f"从 X-Real-IP 获取到客户端 IP: {ip}，原始 X-Real-IP 头: {real_ip}")
-    #     return ip
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        # 获取上一跳ip，如果是用户直连就是用户真实ip
+        ip = real_ip.strip()
+        log.info(f"从 X-Real-IP 获取到客户端 IP: {ip}，原始 X-Real-IP 头: {real_ip}")
+        return ip
 
     # 获取直接访问FastAPI进程的那个客户端的ip（本地：127.0.0.1，服务器：内网ip）
     ip = request.client.host if request.client else ""
