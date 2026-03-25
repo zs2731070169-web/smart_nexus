@@ -16,8 +16,8 @@ services:
     environment:
       - TZ=Asia/Shanghai
     volumes:
-      - ../../../data/knowledge/chroma_kb:/app/chroma_kb  # ChromaDB 持久化
-      - ../../../data/knowledge/crawl:/app/data/crawl     # 爬虫输出目录
+      - ../../data/knowledge/chroma_kb:/app/chroma_kb  # ChromaDB 持久化
+      - ../../data/knowledge/crawl:/app/data/crawl     # 爬虫输出目录
 
   consultant:
     build: ../../consultant  # 自动构建 consultant 镜像
@@ -25,8 +25,8 @@ services:
     environment:
       - TZ=Asia/Shanghai
     volumes:
-      - ../../../data/consultant/log:/app/log          # 日志持久化
-      - ../../../data/consultant/history:/app/history  # 对话历史持久化
+      - ../../data/consultant/log:/app/log          # 日志持久化
+      - ../../data/consultant/history:/app/history  # 对话历史持久化
     depends_on:
       mysql:
         condition: service_healthy  # 等 MySQL 健康检查通过再启动
@@ -40,7 +40,7 @@ services:
       MYSQL_DATABASE: smart_nexus
       TZ: Asia/Shanghai
     volumes:
-      - ../../../data/mysql:/var/lib/mysql
+      - ../../data/mysql:/var/lib/mysql
       - ../db/smart_nexus.sql:/docker-entrypoint-initdb.d/smart_nexus.sql  # 首次启动自动初始化
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--connect-timeout=3"]
@@ -54,4 +54,4 @@ services:
     environment:
       - TZ=Asia/Shanghai
     volumes:
-      - ../../../data/redis:/data
+      - ../../data/redis:/data

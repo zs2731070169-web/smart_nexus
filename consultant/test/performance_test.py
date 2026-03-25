@@ -6,7 +6,7 @@
   - /chat 为 LLM 流式接口，重点测首字节延迟（TTFB）和流式完成时间
   - 性能测试不调整并发量过大，以免影响服务稳定性
 运行前提：服务已启动（http://127.0.0.1:8001）
-运行方式：cd backend/consultant && python test/performance_test.py
+运行方式：cd consultant && python test/performance_test.py
 """
 import sys
 import json

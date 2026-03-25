@@ -1,7 +1,7 @@
 """
 单元测试 - consultant 模块
 测试范围：纯业务逻辑（无需运行服务器、无需 Redis/MySQL 连接）
-运行方式：cd backend/consultant && python test/unit_test.py
+运行方式：cd consultant && python test/unit_test.py
 """
 import sys
 import os

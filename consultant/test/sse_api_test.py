@@ -4,7 +4,7 @@ SSE 接口压测脚本
 向 consultant /chat 接口发起 SSE 请求，覆盖所有测试用例，
 汇总每条用例的耗时指标并输出统计报告。
 
-运行方式（工作目录须为 backend/consultant/）：
+运行方式（工作目录须为 consultant/）：
     python test/sse_api_test.py
 """
 

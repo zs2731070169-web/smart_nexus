@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 # Smart Nexus 一键部署脚本
-# 执行方式：bash backend/deploy/cmd/deploy.sh（从项目根目录执行）
+# 执行方式：bash deploy/cmd/deploy.sh（从项目根目录执行）
 # ============================================================
 
 set -e # 遇到任何非零退出码的命令立即终止脚本,只要失败就不继续执行，避免部署进入不可控状态
@@ -24,12 +24,12 @@ step()  { echo -e "\n${BLUE}==============================${NC}\n${BLUE} $1 ${NC
 # 路径定义（以脚本自身位置为基准，不依赖执行目录）
 # ============================================================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEPLOY_DIR="$SCRIPT_DIR/.."           # backend/deploy/
-DOCKER_DIR="$DEPLOY_DIR/docker"       # backend/deploy/docker/
-KNOWLEDGE_ENV="$DEPLOY_DIR/../knowledge/.env"    # backend/knowledge/.env
-CONSULTANT_ENV="$DEPLOY_DIR/../consultant/.env"  # backend/consultant/.env
-NGINX_CONF="$DEPLOY_DIR/nginx/nginx.conf"           # backend/deploy/nginx/nginx.conf
-DATA_DIR="$DEPLOY_DIR/../../data"     # backend/data/
+DEPLOY_DIR="$SCRIPT_DIR/.."           # deploy/
+DOCKER_DIR="$DEPLOY_DIR/docker"       # deploy/docker/
+KNOWLEDGE_ENV="$DEPLOY_DIR/../knowledge/.env"    # knowledge/.env
+CONSULTANT_ENV="$DEPLOY_DIR/../consultant/.env"  # consultant/.env
+NGINX_CONF="$DEPLOY_DIR/nginx/nginx.conf"           # deploy/nginx/nginx.conf
+DATA_DIR="$DEPLOY_DIR/../data"        # data/
 
 # ============================================================
 # ① 检查环境依赖

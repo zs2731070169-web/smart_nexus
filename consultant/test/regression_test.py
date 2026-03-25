@@ -2,7 +2,7 @@
 回归测试 - consultant 模块（全部5个接口）
 测试范围：各接口的正常路径、异常路径、边界条件、鉴权校验
 运行前提：服务已启动（http://127.0.0.1:8001）
-运行方式：cd backend/consultant && python test/regression_test.py
+运行方式：cd consultant && python test/regression_test.py
 """
 import sys
 import json

@@ -2,7 +2,7 @@
 集成测试 - consultant 模块（完整业务流程）
 测试范围：端到端业务流程，跨接口协作，Session 管理，Token 生命周期
 运行前提：服务已启动（http://127.0.0.1:8001），Redis 和 MySQL 已就绪
-运行方式：cd backend/consultant && python test/integration_test.py
+运行方式：cd consultant && python test/integration_test.py
 """
 import sys
 import json
