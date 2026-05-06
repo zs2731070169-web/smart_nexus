@@ -10,7 +10,7 @@ from infra.logging.logger import log
 from schema.response import StreamMessages
 from service.memory_service import memory_service
 
-MAX_TRY_COUNT = 3
+MAX_TRY_COUNT = 20
 
 
 class AgentService:
@@ -90,8 +90,9 @@ class AgentService:
                     render_type=RenderType.PROCESSING
                 ).model_dump_json() + "\n\n")
 
-                # 非阻塞等待 0.5 秒
-                await asyncio.sleep(0.5)
+                # 指数退避等待：0.5s, 1s, 2s, ...，最大 10s
+                backoff_seconds = min(0.5 * (2 ** retry_count), 10)
+                await asyncio.sleep(backoff_seconds)
 
                 # 递归重试
                 async for chunk in self.stream_messages(query, user_id, session_id, ip, retry_count + 1):
