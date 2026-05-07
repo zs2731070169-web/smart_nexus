@@ -1,40 +1,10 @@
 import json
 from typing import Any
 
-from agents import Runner, RunConfig, function_tool
+from agents import Agent, FunctionTool, Runner, RunConfig
 
-from agent.node_agents import consult_agent, navigation_agent
 from constants.enums import RouteStatus
 from infra.logging.logger import log
-
-
-@function_tool
-async def route_consult_agent(query: str) -> str:
-    """
-    **售后咨询专家**：专门负责处理用户技术售后咨询
-    比如：
-        电脑开机后蓝屏怎么解决？
-        MacBook M3 如何通过 Thunderbolt 外接独立显卡？
-
-    :param str query: 用户的咨询问题，可能涉及电脑、电视、手机等电子设备的技术售后问题
-    :return: JSON 字符串，包含 status / summary / tool_calls 字段
-    """
-    return await _run_sub_agent(consult_agent, query, label="售后咨询专家")
-
-
-@function_tool
-async def route_navigation_agent(query: str) -> str:
-    """
-    **售后服务站导航专家**：专门负责处理用户关于线下售后服务站点的导航问题
-    比如：
-        哪里有联想电脑售后？
-        附近有vivo官方维修点吗？
-        帮我找一下附近的小米之家旗舰店，我要换屏
-
-    :param str query: 用户咨询的售后站点导航问题
-    :return: JSON 字符串，包含 status / summary / tool_calls 字段
-    """
-    return await _run_sub_agent(navigation_agent, query, label="售后服务站导航专家")
 
 
 async def _run_sub_agent(agent, query: str, *, label: str) -> str:
@@ -63,6 +33,22 @@ async def _run_sub_agent(agent, query: str, *, label: str) -> str:
         )
 
 
+def _extract_tool_calls(run_result) -> list[str]:
+    """
+    从 RunResult 中抽取子 agent 调用过的工具名，作为顶层可观察信号
+    """
+    tools: list[str] = []
+    try:
+        for item in getattr(run_result, "new_items", []) or []:
+            raw = getattr(item, "raw_item", None)
+            name = getattr(raw, "name", None)
+            if name:
+                tools.append(name)
+    except Exception as e:
+        log.debug(f"提取子 agent 工具调用失败: {e}")
+    return tools
+
+
 def _build_envelope(status: str,
                     summary: str = "",
                     error_message: str = "",
@@ -84,23 +70,32 @@ def _build_envelope(status: str,
     return json.dumps(envelope, ensure_ascii=False)
 
 
-def _extract_tool_calls(run_result) -> list[str]:
-    """
-    从 RunResult 中抽取子 agent 调用过的工具名，作为顶层可观察信号
-    """
-    tools: list[str] = []
-    try:
-        for item in getattr(run_result, "new_items", []) or []:
-            raw = getattr(item, "raw_item", None)
-            name = getattr(raw, "name", None)
-            if name:
-                tools.append(name)
-    except Exception as e:
-        log.debug(f"提取子 agent 工具调用失败: {e}")
-    return tools
+class AgentRouterRegistry:
+    """子 agent 路由注册器：传入 agent 实例 + 描述，自动构造路由 function_tool."""
+
+    def __init__(self) -> None:
+        self._routes: list[FunctionTool] = []
+
+    def register(self, agent: Agent, description: str) -> None:
+        async def on_invoke(_ctx, args_json: str) -> str:
+            query = json.loads(args_json or "{}").get("query", "")
+            return await _run_sub_agent(agent, query, label=agent.name)
+
+        self._routes.append(FunctionTool(
+            name=f"route_{agent.name}",
+            description=description,
+            params_json_schema={
+                "type": "object",
+                "properties": {"query": {"type": "string", "description": "用户问题"}},
+                "required": ["query"],
+                "additionalProperties": False,
+            },
+            # 当协调 LLM 需要触发该 tool 的时候才进行回调
+            on_invoke_tool=on_invoke,
+        ))
+
+    def routes(self) -> list[FunctionTool]:
+        return list(self._routes)
 
 
-AGENT_ROUTER = [
-    route_consult_agent,
-    route_navigation_agent,
-]
+agent_router_registry = AgentRouterRegistry()
