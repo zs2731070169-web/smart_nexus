@@ -9,15 +9,13 @@ class Settings(BaseSettings):
     """Consultant 模块配置（仅包含智能顾问相关配置项）"""
 
     # ============================== 模型服务商配置 ==============================
-
-    # SF_API_KEY: Optional[str] = Field(default="", description="硅基流动 API Key")
-    # SF_BASE_URL: Optional[str] = Field(default="https://api.siliconflow.cn/v1", description="硅基流动 Base URL")
-
-    AL_BAILIAN_API_KEY: Optional[str] = Field(default="", description="阿里百炼 API Key")
-    AL_BAILIAN_BASE_URL: Optional[str] = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                                               description="百炼 Base URL")
-    MAIN_MODEL_NAME: Optional[str] = Field(default="qwen3.5-flash", description="百炼模型")
-    SUB_MODEL_NAME: Optional[str] = Field(default="qwen3.5-flash", description="百炼模型")
+    API_KEY: Optional[str] = Field(default="", description="API Key")
+    BASE_URL: Optional[str] = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1",
+                                    description="Base URL")
+    # 主模型：用于 coordination_agent，需支持 enable_thinking 才能输出原生思维链
+    MAIN_MODEL_NAME: Optional[str] = Field(description="协调模型（需支持 thinking）")
+    # 子模型：用于 consult_agent / navigation_agent，普通对话模型即可
+    SUB_MODEL_NAME: Optional[str] = Field(description="工作模型")
 
     # ============================== 数据库配置 ==============================
 
@@ -83,13 +81,8 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validation_default_value(self):
         """settings 实例创建以后执行该方法校验默认值"""
-        has_key = any([
-            # self.SF_API_KEY and self.SF_API_KEY.strip(),
-            self.AL_BAILIAN_API_KEY and self.AL_BAILIAN_API_KEY.strip(),
-        ])
-
-        if not has_key:
-            raise ValueError("至少需要配置一个有效的 AL_BAILIAN_API_KEY）")
+        if not self.API_KEY and not self.API_KEY.strip():
+            raise ValueError("至少需要配置一个有效的 API_KEY）")
 
         return self
 

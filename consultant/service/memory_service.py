@@ -55,20 +55,16 @@ class MemoryService:
             if history_list and not isinstance(history_list, list):
                 history_list = json.loads(history_list)
 
-            # 如果没有历史消息，使用默认的系统消息作为历史消息
-            if not history_list:
-                history_list = self._default_system_history_message()
-
-            return history_list
+            return history_list or []
         except JSONDecodeError as e:
             log.error(f"历史消息文件 {session_id}.json 格式错误，无法反序列化为 JSON: {str(e)}")
-            return [{"role": "system", "content": "用户文件读取失败"}]
+            return []
         except FileNotFoundError as e:
             log.error(f"历史消息文件 {session_id}.json 不存在: {str(e)}")
-            return [{"role": "system", "content": "用户文件读取失败"}]
+            return []
         except Exception as e:
             log.error(f"加载历史消息失败: {str(e)}")
-            return [{"role": "system", "content": "用户文件读取失败"}]
+            return []
 
     def _truncate_history(self, history_list: list[dict[str, Any]], truncate_num: int) -> list[dict[str, Any]]:
         """
@@ -102,16 +98,6 @@ class MemoryService:
         except Exception as e:
             log.error(f"裁剪历史消息失败: {str(e)}")
             return history_list
-
-    def _default_system_history_message(self) -> list[dict[str, Any]]:
-        """
-        默认历史会话消息
-        :return:
-        """
-        return [{
-            "role": "system",
-            "content": "你是一个智能售后咨询助手，无论用户遇到什么样的技术售后咨询问题，都请尽力帮助他们找到解决方案。"
-        }]
 
     def save_history(self, user_id: str, session_id: str, history_message: list[dict[str, Any]]) -> bool:
         """

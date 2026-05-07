@@ -27,6 +27,14 @@ class FinishedReason(Enum):
     EXCEPTION = "EXCEPTION"  # 异常结束
 
 
+class RouteStatus(str, Enum):
+    """
+    子agent路由状态
+    """
+    SUCCESS = "SUCCESS"  # 子 agent 正常返回
+    ERROR = "ERROR"  # 子 agent 执行异常
+
+
 TOOL_NAME_MAPPING = {
     # 搜索MCP工具
     "tavily_search": "联网搜索",
@@ -52,3 +60,5 @@ AGENT_NAME_MAPPING = {
     "consult_agent": "咨询Agent",
     "navigation_agent": "导航Agent",
 }
+
+MAX_TRY_COUNT = 20

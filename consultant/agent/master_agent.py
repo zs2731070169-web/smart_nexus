@@ -12,7 +12,7 @@ coordination_agent = Agent(
     instructions=load_file(settings.PROMPTS_FILE_DIR + "/coordination_agent.md"),
     model=main_model,
     tools=AGENT_ROUTER,
-    model_settings=ModelSettings(temperature=0)
+    model_settings=ModelSettings(temperature=0.3)
 )
 
 
