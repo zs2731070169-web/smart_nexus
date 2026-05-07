@@ -232,7 +232,7 @@ docker compose logs -f knowledge
 ```ini
 # .env.example
 [LLM]
-API_KEY=your_openai_api_key
+API_KEY=your_api_key
 BASE_URL=https://api.openai-proxy.org/v1
 MODEL=gpt-4o-mini
 EMBEDDING_MODEL=text-embedding-3-large
@@ -247,11 +247,11 @@ RETRY_COUNT=3
 
 ```ini
 [LLM]
-# 阿里百炼（推荐）或 OpenAI 兼容接口
-AL_BAILIAN_API_KEY=your_bailian_key
-AL_BAILIAN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-MAIN_MODEL_NAME=qwen3.5-plus        # 主 Agent 用
-SUB_MODEL_NAME=qwen3.5-flash         # 子 Agent 用
+# minimax（推荐）或 OpenAI 兼容接口
+API_KEY=your_api_key
+BASE_URL=https://api.minimaxi.com/v1
+MAIN_MODEL_NAME=MiniMax-M2.7-highspeed        # 主 Agent 用
+SUB_MODEL_NAME=MiniMax-M2.7-highspeed         # 子 Agent 用
 
 [Database]
 MYSQL_HOST=mysql                     # 容器环境填服务名
@@ -753,7 +753,6 @@ docker compose exec knowledge python -m cli.ingestion_cli
 |------|------|
 | [CLAUDE.md](CLAUDE.md) | Claude Code 开发指南 |
 | [DEPLOY.md](DEPLOY.md) | 云服务器详细部署文档 |
-| [项目介绍-面试版.md](项目介绍-面试版.md) | 架构设计与难点分析 |
 
 ---
 
