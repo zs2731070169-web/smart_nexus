@@ -2,169 +2,132 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## 项目概览
+## 项目概述
 
-两个独立的 FastAPI 后端服务，通过 Docker Compose + Nginx 部署：
+Smart Nexus 是一个 AI 原生的智能售后顾问系统，由两个独立的 FastAPI 微服务组成：
 
-| 服务 | 端口 | 职责 |
-|------|------|------|
-| `consultant/` | 8001 | 多 Agent 智能顾问（对话、鉴权、导航） |
-| `knowledge/` | 8000 | 知识库管理（检索、向量化、爬虫） |
+- **consultant**（端口 8001）：多 Agent 编排 + MCP 工具的对话服务，SSE 流式响应。`root_path=/smart/nexus`，路由前缀再加 `/consultant`。
+- **knowledge**（端口 8000）：RAG 知识库服务（爬取 → 切片 → 向量化 → 双路召回）。`root_path=/smart/nexus/knowledge`。
+
+两个服务**不共享 Python 包**，各自有独立的 `requirements.txt` / `setup.py` / `Dockerfile`，通过 HTTP 互通（consultant 调用 knowledge 的 `/retrieval/query`）。
+
+更详细的部署、架构、难点说明见 `DEPLOY.md` 与 `项目介绍-面试版.md`。
 
 ## 常用命令
 
+### 本地开发（不走 Docker）
+
+```powershell
+# consultant 服务
+cd F:\projects\smart_nexus\consultant
+pip install -r requirements.txt
+python -m api.main          # 监听 0.0.0.0:8001（端口由 .env 的 APP_PORT 决定）
+
+# knowledge 服务
+cd F:\projects\smart_nexus\knowledge
+pip install -r requirements.txt
+python -m api.main          # 监听 0.0.0.0:8000
+```
+
+两个服务都依赖 `.env`（不进 git，模板见对应目录的 `.env.example`）。`consultant/config/settings.py` 在启动期 fail-fast，必填项缺失会一次性抛出全部错误，不要补 default。
+
+### 测试
+
+```powershell
+# consultant：每个测试文件独立可运行（内部用 unittest.main）
+cd F:\projects\smart_nexus\consultant
+python test/unit_test.py             # 纯逻辑单测，无需 DB/Redis
+python test/agent_router_test.py     # 单文件单测
+python test/integration_test.py      # 集成测试（需服务已启动）
+python test/sse_api_test.py          # SSE 接口测试
+
+# knowledge：使用标准 unittest discover
+cd F:\projects\smart_nexus\knowledge
+python -m unittest discover -s test -v
+python -m unittest test.retrieval_service_test
+```
+
+注：`unit_test.py` 头部会 `os.environ.setdefault` 注入 `SECRET_KEY` 等假值绕过 settings 校验；新写测试时同样要保证 `SECRET_KEY ≥ 32 字节`，否则 PyJWT 会拒绝。
+
+### 知识库构建（在 knowledge 容器/本地执行）
+
 ```bash
-# 本地启动（工作目录须为项目根）
-cd consultant && python -m api.main
-cd knowledge  && python -m api.main
+# 1) 爬取范围在 knowledge/cli/crawl_cli.py 中硬编码的 range(...) 里改
+python -m cli.crawl_cli       # 输出到 data/knowledge/crawl/
+python -m cli.ingestion_cli   # 摄入到 ChromaDB（基于文件 hash 自动去重，重复执行只追加）
+```
 
-# 知识库构建（服务启动后执行，工作目录为项目根）
-python -m knowledge.cli.crawl_cli       # 爬取 Lenovo iKnow 文档
-python -m knowledge.cli.ingestion_cli   # 向量化写入 ChromaDB
+清空向量库需手动 `rm -rf data/knowledge/chroma_kb/*` 后重新摄入。
 
-# 测试脚本（工作目录须为 consultant/）
-cd consultant
-python test/agent_router_test.py   # Agent 路由完整用例（推荐首选）
-python test/master_agent_test.py
-python test/consult_agent_test.py
-python test/navigation_agent_test.py
-python test/mcp_test.py
-python test/database_test.py
+### Docker 部署
 
-# Docker 部署（工作目录为项目根）
+```bash
+# 一键部署（从项目根执行；脚本会读 consultant/.env 的 MYSQL_PASSWORD）
 bash deploy/cmd/deploy.sh
+
+# 日常运维（在 deploy/docker 目录下执行 docker compose）
+cd deploy/docker
+docker compose ps
+docker compose logs -f consultant
+docker compose up -d --build consultant            # 改了代码/requirements 后
+docker compose up -d --force-recreate consultant   # 仅改了 .env 后
+docker compose exec nginx nginx -s reload          # 改了 nginx.conf 后
 ```
 
----
+## 架构关键点
 
-## consultant 模块架构
-
-### API 层（`api/`）
-
-`api/main.py`：FastAPI 根路径 `/smart/nexus`，含 CORS 中间件、`AuthTokenMiddleware` 鉴权，以及 **MCP lifespan**（应用启动时连接 Tavily + 百度地图 MCP，关闭时断开，同时启动 60 秒心跳探活任务）。使用 `anyio.run()` 而非 `asyncio.run()` 保证 cancel scope 统一。
-
-`api/router.py` 注册 6 个端点：
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/code` | 生成验证码（存 Redis 60 秒） |
-| POST | `/login` | 验证码登录，返回 JWT |
-| DELETE | `/logout` | 登出，更新数据库 `is_login` |
-| POST | `/chat` | **核心**：SSE 流式对话 |
-| POST | `/query_chat_history` | 列出用户历史会话 |
-| DELETE | `/delete_chat_history` | 删除指定会话 |
-
-`/chat` 接收 `query` + `session_id`，IP 从 `X-Forwarded-For → X-Real-IP → client.host` 依次获取，传给 Agent 做定位兜底。
-
-### 三层 Agent 架构
+### 三层 Agent + 双注册器（consultant 核心）
 
 ```
-coordination_agent（master_agent.py）
-    ↓ @function_tool（AGENT_ROUTER）
-route_consult_agent / route_navigation_agent（agent_router.py）
-    ↓ Runner.run() 同步执行
-consult_agent / navigation_agent（node_agents.py）
+coordination_agent (L1, ReAct, max_turns=15)
+   tools = agent_router_registry.routes()
+        │
+        ├─ route_consult_agent      ──→ consult_agent      (L3)
+        └─ route_navigation_agent   ──→ navigation_agent   (L3)
+                                          tools/mcp = tool_registry.{function_tools(), mcp_servers()}
 ```
 
-- **第一层**：`coordination_agent` 使用 `main_model`（qwen3.5-plus），`max_turns=5`，流式执行（`Runner.run_streamed()`）
-- **第二层**：两个 `@function_tool` 内部调用 `Runner.run()`（非流式），返回 `final_output` 字符串给上层
-- **第三层**：
-  - `consult_agent`：工具 `[retrieval_knowledge]` + MCP `[web_search_mcp]`
-  - `navigation_agent`：工具 `[search_coordinate_source, navigation_sites]` + MCP `[baidu_map_mcp]`
-  - 均使用 `sub_model`（qwen3.5-flash），`temperature=0`
+- **`infra/tools/base.py`** 定义 `BaseTool`（`execute(args:BaseModel) -> ToolResult`）+ `ToolRegistry`（同时管 local 工具和 MCP server）。新增工具：写一个继承 `BaseTool` 的类，在 `infra/tools/__init__.py` 加一行 `tool_registry.register(...)`，**不要**改 agent 定义。
+- **`agent/agent_router.py`** 定义 `AgentRouterRegistry`：`register(agent, description)` 用闭包把 `Runner.run(agent)` 包装成 `route_{agent.name}` 形式的 `FunctionTool`，子 agent 输出统一封装为 `{status, summary, tool_calls, error_message?}` JSON envelope（见 `constants/enums.RouteStatus`）。新增子 agent：在 `agent/node_agents.py` 定义实例，在 `agent/__init__.py` 加一行 `agent_router_registry.register(...)`。
+- **主控**通过 envelope 的 `status` 决定是否 replan，通过 `tool_calls` 观测子 agent 实际用了哪些工具。
 
-### 服务层（`service/`）
+不要在 agent 定义中硬编码工具列表，也不要为每个子 agent 单独手写 `@function_tool route_xxx` 模板——这是被刻意重构掉的反模式。
 
-**`agent_service.py`**：`stream_messages()` 加载历史消息 → 流式执行 `coordination_agent` → 处理事件 → 保存历史。最多重试 3 次（递归调用），第 3 次失败发送 `EXCEPTION` 结束帧。
+### MCP 长连接保活
 
-**`memory_service.py`**：历史记录保存为 `history/{user_id}/{session_id}.json`，每次加载时截断保留最近 3 轮（6 条非系统消息）。默认系统消息："你是一个智能售后咨询助手"。
+`infra/tools/mcp/mcp_client.py` 在 FastAPI lifespan（`api/main.py`）启动 60 秒心跳协程，探活前会 `server._tools = None` 清缓存（`cache_tools_list=True` 的 SDK 缓存陷阱），失败立即 `cleanup()→connect()`。`httpx_client_factory(trust_env=False)` 隔离宿主代理。**主入口用 `anyio.run()` 而非 `asyncio.run()`**，以便 cancel scope 在统一上下文里收敛。
 
-**`login_service.py`**：验证码存 `phone_code:{phone}`（Redis），登录锁存 `login_lock:{phone}`（5 秒防重复）。JWT 携带 `user_id` + `iat`；鉴权时比对 `iat` 与数据库 `login_time`，`iat < login_time` 则 token 无效（防旧 token 复用）。
+### SSE 流式协议
 
-### 本地工具（`infra/tools/local/`）
+- 协议模型：`schema/response.StreamMessages`，`render_type ∈ {THINKING, PROCESSING, ANSWER, EXCEPTION}`。
+- `<think>...</think>` 标签流式拆分：`utils/tag_extract_utils.py` 是字符级状态机，跨 chunk 拼接半个标签；切换 agent / 工具调用时必须 `flush` 残留 buf。
+- `service/agent_service.stream_messages()` 自带指数退避重试（`MAX_TRY_COUNT=20`，`min(0.5*2^n, 10)` 秒），`ValueError` 短路不重试，最终失败发 `EXCEPTION` 终止帧。
 
-**`retrieval_knowledge`**：POST `settings.KNOWLEDGE_BASE_URL`，超时 120 秒，返回 JSON 字符串。
+### 鉴权（软吊销 JWT）
 
-**`search_coordinate_source`**：三级降级——① `map_geocode`（地名解析）→ ② `map_ip_location`（IP 定位，境外 IP 自动获取公网 IP via pystun3）→ ③ 北京坐标兜底（116.413383, 39.910924）。直接调用 `baidu_map_mcp.call_tool()`（不经过 Agent 工具调用流程）。
+JWT payload 写 `iat`，DB `user.login_time` 比对：新登录刷新 `login_time` → 所有旧 token 立即失效。`AuthTokenMiddleware` 走白名单（`config/settings.py` 的 `WHITE_LIST`，目前是 `/code` 和 `/login`）。Redis `login_lock:{phone}` 5 秒短锁防爆破。
 
-**`navigation_sites`**：对 `repair_shops` 表执行 Haversine 公式 SQL 查询，`LIMIT 3`。
+### 上下文截断
 
-### MCP 层（`infra/tools/mcp/mcp_client.py`）
+历史持久化为 `data/consultant/history/{user_id}/{session_id}.json`，但加载只保留最近 3 轮（6 条非系统消息），系统消息单独分组不参与截断。用户 IP 通过附加 user 消息（`[非用户问题，用户当前ip：xxx]`）透传给 agent，**不写入历史**。
 
-- `web_search_mcp`、`baidu_map_mcp` 均为 `MCPServerStreamableHttp`，`httpx_client_factory` 设置 `trust_env=False`（不走系统代理）
-- `connect()` / `disconnect()` 供 lifespan 调用
-- `heartbeat(interval=60)`：每次探活清除 `server._tools` 缓存后调用 `list_tools()`，强制发起网络请求；失败则 `cleanup() → connect()` 重连
+### 知识库双路召回
 
-### 数据访问层（`infra/db/`、`repo/`）
+`knowledge/service/retrieval/`：
+- 路 A：Chroma 向量检索（top_5）
+- 路 B：标题关键词召回 → Jaccard 粗排（jieba 70% + 字符集 30%）→ 标题向量+关键词分精排
+- MD5（`title + content[:100]`）去重合并 → 余弦 0.5 阈值丢弃
 
-- **MySQL**：`PooledDB`（DBUtils），`maxconnections=5`，`asyncio.to_thread()` 包装同步操作；`get_cursor()`（读）/ `write_cursor()`（写，自动 commit/rollback）
-- **Redis**：`aioredis.ConnectionPool`，`decode_responses=True`；`get_session()` 上下文管理器
+修改召回逻辑务必保持双路独立，不要合并成单路向量检索。
 
-### SSE 响应格式（`schema/response.py`）
+### 三级降级定位（navigation）
 
-SSE 帧格式：`data: {StreamMessages.model_dump_json()}\n\n`
+`map_geocode → map_ip_location → pystun3 公网 IP 重试 → 北京坐标兜底 (116.4133, 39.9109)`。`api/router._get_client_ip` 顺序：`X-Forwarded-For[0] → X-Real-IP → request.client.host`。BD09 ↔ WGS84 转换在 `utils/map_utils.py`。
 
-```
-StreamMessages
-  ├── id: str
-  ├── status: PROCESSING | FINISHED
-  ├── data: DeltaMessage(render_type, data) | FinishMessage
-  └── metadata: {create_time, finished_reason: NORMAL|MAX_TOKEN|EXCEPTION, error_message}
-```
+## 项目约定
 
-`render_type`：`THINKING`（推理过程）/ `PROCESSING`（工具调用）/ `ANSWER`（最终回答）
-
-事件映射（`_handle_streaming_event`）：
-- `response.output_text.delta` → `ANSWER`
-- `response.reasoning_text.delta` → `THINKING`
-- `run_item_stream_event[tool_called]` → `PROCESSING`（工具名通过 `TOOL_NAME_MAPPING` 转为中文）
-
-### 配置（`config/settings.py`、`.env`）
-
-必填：`AL_BAILIAN_API_KEY`、`MYSQL_*`、`REDIS_HOST`、`TAVILY_API_KEY`、`BAIDUMAP_AK`、`SECRET_KEY`、`KNOWLEDGE_BASE_URL`
-
-Docker 容器间通信：`MYSQL_HOST=mysql`、`REDIS_HOST=redis`、`KNOWLEDGE_BASE_URL=http://knowledge:8000/...`（使用服务名，不用 IP）
-
----
-
-## knowledge 模块架构
-
-### API 层（`api/router.py`）
-
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/injection/upload` | 上传 .md/.txt 文件，立即向量化 |
-| POST | `/retrieval/query` | 检索 + LLM 生成回复 |
-
-### 检索流程（`service/retrieval/retrieval_service.py`）
-
-两路并行检索 → 合并去重 → 重排 → 返回 top_k：
-
-1. **向量检索**：`Chroma.similarity_search()`，L2 范数，top_5
-2. **标题关键词检索**：
-   - 粗排（top_50）：Jaccard 相似度（jieba 分词 70% + 字符集 30%）
-   - 精排（top_5）：标题向量余弦相似度（70%）+ 关键词分 30%
-   - 长文档（> CHUNK_SIZE=3000）：取最相似的 3 个分片
-3. **去重**：MD5(标题 + 内容前 100 字)
-4. **重排**：余弦相似度，动态阈值 0.5
-
-**`query_service.py`**：使用 `gpt-4o-mini` 基于检索结果生成回复；Prompt 要求严格忠实资料、品牌中立、图片以纯文本 URL 展示、结尾注明参考文档。
-
-### 向量化流程（`service/ingestion/`、`repo/vector_repo.py`）
-
-- 分片策略：`RecursiveCharacterTextSplitter`，separators 优先级：`\n## > \n** > \n\n > \n > 空格 > 字符`，chunk_size=3000，overlap=300
-- 分片时 `page_content` 格式：`"主题：{filename}\n\n内容：{chunk_text}"`
-- 向量模型：`text-embedding-3-large`（OpenAI 兼容接口）
-- 向量库：Chroma，collection `smart_nexus`，持久化到 `knowledge/chroma_kb/`
-
-### CLI 工具
-
-**`crawl_cli.py`**：爬取 Lenovo iKnow（`settings.KNOWLEDGE_BASE_URL`），连续失败 5 次暂停 60 秒，每条间隔 0.2 秒，输出到 `knowledge/data/crawl/{id:04d}_{title}.md`。爬取范围 `range(0, 2000)` 硬编码在脚本中，增量更新需手动修改。
-
-**`ingestion_cli.py`**：批量处理（batch_size=20），`FileUtils.remove_duplicate_files()` 自动去重，重复执行会追加而非覆盖（Chroma 不去重，清空需手动删除 `chroma_kb/`）。
-
-### 配置
-
-必填：`API_KEY`（OpenAI 兼容）
-
-路径均为相对路径，工作目录须为项目根，例如 `VECTOR_STORE_PATH=knowledge/chroma_kb`。
+- **始终用简体中文**回复、写文档、写代码注释（用户全局规则）。
+- 默认使用 **MiniMax-M2.7-highspeed**（OpenAI 兼容接口，支持 `enable_thinking` 原生思维链）作为主/子 Agent 模型；知识库生成用 `gpt-4o-mini`，向量化用 `text-embedding-3-large`。
+- consultant 容器间通信**必须**用服务名（`MYSQL_HOST=mysql`、`REDIS_HOST=redis`、`KNOWLEDGE_BASE_URL=http://knowledge:8000/...`），不要写 localhost / 127.0.0.1。
+- `.env` 中的 `MYSQL_PASSWORD` **不要**包含 `$` 等 shell 特殊字符，会被 deploy.sh 误展开。
+- 部署相关 nginx.conf 是 HTTPS-only（80 强制跳 443），首次部署前必须先签 SSL 证书放到 `deploy/nginx/ssl/`，否则 nginx 容器起不来。
