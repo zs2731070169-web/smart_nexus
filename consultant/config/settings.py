@@ -9,9 +9,8 @@ class Settings(BaseSettings):
     """Consultant 模块配置（仅包含智能顾问相关配置项）"""
 
     # ============================== 模型服务商配置 ==============================
-    API_KEY: Optional[str] = Field(default="", description="API Key")
-    BASE_URL: Optional[str] = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                                    description="Base URL")
+    API_KEY: Optional[str] = Field(description="API Key")
+    BASE_URL: Optional[str] = Field(description="Base URL")
     # 主模型：用于 coordination_agent，需支持 enable_thinking 才能输出原生思维链
     MAIN_MODEL_NAME: Optional[str] = Field(description="协调模型（需支持 thinking）")
     # 子模型：用于 consult_agent / navigation_agent，普通对话模型即可
@@ -81,8 +80,15 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def validation_default_value(self):
         """settings 实例创建以后执行该方法校验默认值"""
-        if not self.API_KEY and not self.API_KEY.strip():
-            raise ValueError("至少需要配置一个有效的 API_KEY）")
+        required_fields = {
+            "API_KEY": self.API_KEY,
+            "BASE_URL": self.BASE_URL,
+            "MAIN_MODEL_NAME": self.MAIN_MODEL_NAME,
+            "SUB_MODEL_NAME": self.SUB_MODEL_NAME,
+        }
+        missing = [name for name, value in required_fields.items() if not value or not value.strip()]
+        if missing:
+            raise ValueError(f"以下配置项必须配置且不能为空：{', '.join(missing)}")
 
         return self
 
