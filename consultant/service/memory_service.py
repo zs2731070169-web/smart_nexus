@@ -15,6 +15,20 @@ def _get_history_messages_path(user_id: str, session_id: str) -> str:
     return str(history_dir / user_id / f"{session_id}.json")
 
 
+def _keep_first_and_recent(messages: list[dict[str, Any]], recent: int) -> list[dict[str, Any]]:
+    # 首条 user 消息（任务/指代锚点）+ 最近 recent 条活跃上下文，丢弃中间冗余
+    if not messages:
+        return []
+    # 取最近指定条数的消息
+    tail = messages[-recent:]
+    # 找到第一条 user 消息（任务/指代锚点）
+    first = next((message for message in messages if message.get("role") == "user"), None)
+
+    if first is None or first in tail:
+        return tail
+    return [first] + tail
+
+
 class MemoryService:
 
     def load_history(self, user_id: str, session_id: str, truncate_num: int = 3) -> list[dict[str, Any]]:
@@ -68,33 +82,39 @@ class MemoryService:
 
     def _truncate_history(self, history_list: list[dict[str, Any]], truncate_num: int) -> list[dict[str, Any]]:
         """
-        裁剪历史消息
-        :param history_list:
-        :param truncate_num:
-        :return:
+        按对话轮数分级压缩历史消息
+        - 解决"全保留分散注意力 / 超上下文窗口 / 截断丢失指代锚点"三类问题
+        - 以 truncate_num 为基准窗口，梯度放大；中长档采用 U 型保留（首条 user + 近期滑窗）
         """
         try:
             if not history_list:
                 log.warning("历史消息列表为空，无法裁剪")
                 return []
 
-            # 分组系统历史消息和非系统历史消息
-            system_message = []
-            non_system_messages = []
-            for history in history_list:
-                if history.get("role", "") == "system":
-                    system_message.append(history)
-                else:
-                    non_system_messages.append(history)
+            # 分组系统消息和非系统消息，系统消息完整保留
+            system_messages = [m for m in history_list if m.get("role", "") == "system"]
+            messages = [m for m in history_list if m.get("role", "") != "system"]
 
-            if non_system_messages:
-                # 裁剪指定轮数的非历史消息
-                non_system_messages = non_system_messages[-truncate_num * 2:]
+            if not messages:
+                return history_list
 
-                # 合并系统消息和裁剪后的非系统消息
-                history_list = system_message + non_system_messages
+            # 一轮 = user + assistant 两条
+            total_rounds = len(messages) // 2
 
-            return history_list
+            if total_rounds <= truncate_num:
+                # 极短对话对话全保留
+                kept = messages
+            elif total_rounds <= truncate_num * 3:
+                # 短对话：纯滑窗近 N 轮
+                kept = messages[-truncate_num * 2:]
+            elif total_rounds <= truncate_num * 6:
+                # 中对话：（首+尾） = 首条 user 锚点 + 近 N 轮
+                kept = _keep_first_and_recent(messages, recent=truncate_num * 2)
+            else:
+                # 长对话：（首+尾） + 收紧近期窗口防上下文溢出
+                kept = _keep_first_and_recent(messages, recent=truncate_num)
+
+            return system_messages + kept
         except Exception as e:
             log.error(f"裁剪历史消息失败: {str(e)}")
             return history_list
