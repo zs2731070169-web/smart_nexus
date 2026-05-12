@@ -5,13 +5,18 @@ from agents import Runner, RunConfig, StreamEvent
 
 from agent.master_agent import coordination_agent
 from constants.enums import RenderType, TOOL_NAME_MAPPING, AGENT_NAME_MAPPING, FinishedReason, MAX_TRY_COUNT
+from infra.error import classify_llm_error, jittered_backoff
 from infra.logging.logger import log
+from infra.memory import MemoryManager, default_compressor
 from schema.response import StreamMessages
-from service.memory_service import memory_service
 from utils.tag_extract_utils import make_think_state, extract_think_tag, flush_think_tag
 
 
-class AgentService:
+class AgentEngine:
+
+    def __init__(self):
+        # 默认装配：token 预算压缩器
+        self.memory_manager = MemoryManager(compressor=default_compressor)
 
     async def stream_messages(self,
                               query: str,
@@ -28,77 +33,78 @@ class AgentService:
         :param session_id:
         :return:
         """
+        # 业务校验：不属于系统错误，直接终止，不进入重试流程
+        if not session_id:
+            yield ("data: " + StreamMessages.build_finished(
+                finished_reason=FinishedReason.EXCEPTION,
+                error_message="请求缺少会话id，无法加载历史消息，请确保 session_id 并随请求携带"
+            ).model_dump_json() + "\n\n")
+            return
+
+        # 记录已发出的流式帧数，用于判断重试是否会导致重复内容
+        chunks_sent = 0
         try:
-            # 校验是否有session_id，强制要求携带，由前端生成
-            if not session_id:
-                raise ValueError("请求缺少会话id，无法加载历史消息，请确保 session_id 并随请求携带")
-
-            # 加载对话到上下文
-            history_messages = memory_service.load_history(user_id, session_id)
-
-            # 将用户最新输入加入历史消息，作为agent输入的一部分
+            # 加载历史对话，并合并查询
+            history_messages = self.memory_manager.load_history(user_id, session_id)
             history_messages.append({"role": "user", "content": query})
-
             log.info(f"加载历史消息完成，用户问题: {query}，历史消息轮数: {len(history_messages)}")
 
-            # 流式执行协调agent，获取流式执行结果
+            # 调用协调agent
             run_result = Runner.run_streamed(
-                starting_agent=coordination_agent,  # 入口agent
+                starting_agent=coordination_agent,
                 input=history_messages + [
-                    {"role": "user", "content": f"\n\n[非用户问题，用户当前ip：{ip}]"}] if ip else [],  # 模型参考上下文
-                context=query,  # 明确重点关注用户当前指令
-                max_turns=15,  # ReAct循环：1轮约消耗2-3 turns，预留 5-7 轮 Thought→Action→Observation 余量
+                    {"role": "user", "content": f"\n\n[非用户问题，用户当前ip：{ip}]"}] if ip else [],
+                context=query,
+                max_turns=15,
                 run_config=RunConfig(tracing_disabled=True)
             )
-
             log.info(f"协调agent执行完成，开始处理流式事件，用户问题: {query}，重试次数: {retry_count}")
 
-            # 处理流式消息，返回异步生成器不需要await，直接返回生成器对象即可，由异步迭代器获取消息
-            chunks = _handle_streaming_event(run_result.stream_events())
-            async for chunk in chunks:
+            # 流式打印agent的chunk
+            async for chunk in _handle_streaming_event(run_result.stream_events()):
+                chunks_sent += 1
                 yield chunk
 
-            # 保存最新的一轮对话到历史上下文
-            content = run_result.final_output if run_result.final_output is not None else ""
-            history_messages.append({"role": "assistant", "content": content})
-            if memory_service.save_history(user_id, session_id, history_messages):
-                log.info(f"对话处理完成，历史消息已保存")
         except Exception as e:
             log.error(f"处理对话流式消息过程中发生异常: {str(e)}")
 
-            if isinstance(e, ValueError):
-                yield ("data: " + StreamMessages.build_finished(
-                    finished_reason=FinishedReason.EXCEPTION,
-                    error_message=str(e)
-                ).model_dump_json() + "\n\n")
-            # 小于最大重试次数，执行重试
-            elif retry_count < MAX_TRY_COUNT:
+            # 获取异常分类对象
+            retryable, user_message = _classify_engine_error(e)
+
+            # 允许重试且没有超过最大重试次数，就允许重试
+            if retryable and chunks_sent == 0 and retry_count < MAX_TRY_COUNT:
                 log.info(f"正在第 {retry_count + 1} 次重试处理对话...")
-
                 yield ("data: " + StreamMessages.build_processing(
-                    data="❌处理对话过程中发生系统异常",
+                    data="❌处理对话过程中发生系统异常，🔁重新尝试处理该对话",
                     render_type=RenderType.PROCESSING
                 ).model_dump_json() + "\n\n")
-
-                yield ("data: " + StreamMessages.build_processing(
-                    data="🔁重新尝试处理该对话",
-                    render_type=RenderType.PROCESSING
-                ).model_dump_json() + "\n\n")
-
-                # 指数退避等待：0.5s, 1s, 2s, ...，最大 10s
-                backoff_seconds = min(0.5 * (2 ** retry_count), 10)
-                await asyncio.sleep(backoff_seconds)
-
-                # 递归重试
+                # 指数级退避
+                await asyncio.sleep(jittered_backoff(retry_count + 1, base_delay=0.5, max_delay=10.0))
+                # 递归调用agent
                 async for chunk in self.stream_messages(query, user_id, session_id, ip, retry_count + 1):
                     yield chunk
-            # 超过最大重试次数，直接返回异常信息
             else:
-                log.error(f"❌第 {retry_count} 次重试处理对话仍然失败，已达最大重试次数，停止重试")
+                # 超过最大重试次数，打印错误日志
+                if retry_count >= MAX_TRY_COUNT:
+                    log.error(f"❌ 重试 {retry_count} 次仍失败，已达最大重试次数，停止重试")
+                # 返回错误信息
                 yield ("data: " + StreamMessages.build_finished(
                     finished_reason=FinishedReason.EXCEPTION,
-                    error_message=f"❌系统异常重试执行失败，原因: {str(e)}，请稍后再试..."
+                    error_message=user_message
                 ).model_dump_json() + "\n\n")
+            # 异常路径结束，跳过 save_history ，不保留历史对话
+            return
+
+        history_messages.append({
+            "role": "assistant",
+            "content": run_result.final_output if run_result.final_output is not None else ""
+        })
+        try:
+            # 保存历史对话
+            if await self.memory_manager.save_history(user_id, session_id, history_messages):
+                log.info(f"对话处理完成，历史消息已保存")
+        except Exception as e:
+            log.error(f"历史消息保存失败，本轮对话不计入上下文: {str(e)}")
 
 
 async def _handle_streaming_event(events: AsyncIterator[StreamEvent]) -> AsyncGenerator:
@@ -184,4 +190,14 @@ async def _handle_streaming_event(events: AsyncIterator[StreamEvent]) -> AsyncGe
            )
 
 
-agent_service = AgentService()
+def _classify_engine_error(e: Exception) -> tuple[bool, str]:
+    """对 agent 引擎层异常统一分类，返回 (retryable, user_message)"""
+    if isinstance(e, (ValueError, TypeError, KeyError, AttributeError)):
+        # 代码错误，重试无意义
+        return False, str(e)
+    # 其余交给分类器判断
+    classified = classify_llm_error(e)
+    return classified.retryable, classified.user_message
+
+
+agent_engine = AgentEngine()
