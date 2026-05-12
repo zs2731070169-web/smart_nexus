@@ -2,12 +2,12 @@ from pathlib import Path
 
 from config.settings import settings
 from infra.logging.logger import log
-from service.memory_service import MemoryService
+from infra.memory import MemoryManager
 
 if __name__ == '__main__':
     import shutil
 
-    svc = MemoryService()
+    svc = MemoryManager()
     TEST_USER = "test_user_001"
     TEST_SESSION = "session_20260321"
     NEW_SESSION = "session_new_001"

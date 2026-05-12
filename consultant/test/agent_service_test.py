@@ -1,7 +1,7 @@
 import asyncio
 
 from infra.tools.mcp.mcp_client import web_search_mcp, baidu_map_mcp
-from service.agent_service import agent_service
+from agent.agent_engine import agent_engine
 
 if __name__ == '__main__':
     # ──────────────────────────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ if __name__ == '__main__':
         print(f"[{name}]  {desc}")
         print(f"Query: {query}")
         print("=" * 60)
-        async for chunk in agent_service.stream_messages(query=query, user_id=user_id, session_id=session_id, ip="156.59.13.62"):
+        async for chunk in agent_engine.stream_messages(query=query, user_id=user_id, session_id=session_id, ip="156.59.13.62"):
             print(chunk, end="", flush=True)
         print()
 

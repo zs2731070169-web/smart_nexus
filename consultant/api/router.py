@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Request, Query
 from starlette.responses import StreamingResponse, JSONResponse, Response
 
+from agent.agent_engine import agent_engine
 from infra.logging.logger import log
 from schema.request import ChatRequest, LoginRequest, CodeRequest
 from schema.response import ChatHistoryResp, LoginResp, CodeResp, SystemResp, LogoutResp, DelHistoryResp
-from service.agent_service import agent_service
 from service.login_service import login_service
 from service.session_service import session_service
 
@@ -112,7 +112,7 @@ async def consultant(chat_request: ChatRequest, request: Request) -> StreamingRe
     log.info(f"用户咨询对话接口被调用，用户ID: {user_id}，会话ID: {session_id}，用户问题: {query}，用户ip：{ip}")
 
     # 流式返回回复消息
-    async_generator = agent_service.stream_messages(query, user_id, session_id, ip)
+    async_generator = agent_engine.stream_messages(query, user_id, session_id, ip)
 
     # 通过sse推送流式消息
     return StreamingResponse(

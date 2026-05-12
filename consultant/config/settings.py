@@ -57,6 +57,14 @@ class Settings(BaseSettings):
     PROMPTS_FILE_DIR: str = str(Path(__file__).parent.parent / "prompts")
     HISTORY_FILE_DIR: str = str(Path(__file__).parent.parent / "history")
 
+    # ============================== 记忆压缩配置 ==============================
+    # 历史消息 token 估算超过该阈值时，下次 save_history 触发 LLM 结构化摘要
+    MEMORY_COMPRESS_THRESHOLD_TOKENS: int = Field(default=8000, description="触发上下文压缩的 token 阈值")
+    # tail 段按 token 预算反向累加，保护近期对话不被压缩
+    MEMORY_COMPRESS_TAIL_TOKENS: int = Field(default=2000, description="压缩时保护近期对话的 token 预算")
+    # head 段保护的非系统消息条数（首轮 user+assistant 作为任务/指代锚点，2 条避免出现连续同角色）
+    MEMORY_COMPRESS_HEAD_N: int = Field(default=2, description="压缩时保护头部对话的条数")
+
     # ============================== 登陆验证 ==============================
 
     SECRET_KEY: str = Field(default="", description="登录使用的私钥")

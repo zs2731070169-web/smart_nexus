@@ -61,4 +61,4 @@ AGENT_NAME_MAPPING = {
     "navigation_agent": "导航Agent",
 }
 
-MAX_TRY_COUNT = 20
+MAX_TRY_COUNT = 3
