@@ -1,6 +1,7 @@
 import asyncio
 
-from infra.tools.mcp.mcp_client import web_search_mcp, baidu_map_mcp
+from infra.tools.mcp.web_search_mcp import web_search_mcp
+from infra.tools.mcp.baidu_map_mcp import baidu_map_mcp
 from agent.agent_engine import agent_engine
 
 if __name__ == '__main__':

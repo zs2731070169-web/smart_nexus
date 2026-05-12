@@ -11,3 +11,6 @@ __pycache__/
 /knowledge/chroma_kb/
 /knowledge/.env
 /deploy/docker/.env
+/consultant/.claude/
+/knowledge/.claude/
+/consultant/build/

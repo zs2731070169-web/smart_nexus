@@ -2,7 +2,7 @@ from agents import Runner, RunConfig
 
 from agent.node_agents import consult_agent
 from infra.logging.logger import log
-from infra.tools.mcp.mcp_client import web_search_mcp
+from infra.tools.mcp.web_search_mcp import web_search_mcp
 
 
 async def call_agent(query: str):

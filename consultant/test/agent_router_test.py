@@ -2,7 +2,8 @@ from contextlib import AsyncExitStack
 
 from infra.logging.logger import log
 from agent.agent_router import route_consult_agent, route_navigation_agent
-from infra.tools.mcp.mcp_client import web_search_mcp, baidu_map_mcp
+from infra.tools.mcp.web_search_mcp import web_search_mcp
+from infra.tools.mcp.baidu_map_mcp import baidu_map_mcp
 
 
 async def test_run_consult_agent(query: str):

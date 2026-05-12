@@ -14,7 +14,7 @@ from abc import ABC, abstractmethod
 from typing import Any, Optional
 
 from config.settings import settings
-from infra.ai.ai_client import llm_client
+from infra.client.ai_client import llm_client
 from infra.logging.logger import log
 
 # 摘要器系统提示词

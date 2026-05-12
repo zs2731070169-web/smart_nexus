@@ -2,7 +2,7 @@ from agents import Runner, RunConfig
 
 from agent.node_agents import navigation_agent
 from infra.logging.logger import log
-from infra.tools.mcp.mcp_client import baidu_map_mcp
+from infra.tools.mcp.baidu_map_mcp import baidu_map_mcp
 
 
 async def call_agent(query: str):

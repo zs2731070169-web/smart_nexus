@@ -5,7 +5,8 @@ from typing import Any
 from agents.mcp import MCPServerStreamableHttp
 
 from infra.logging.logger import log
-from infra.tools.mcp.mcp_client import baidu_map_mcp, web_search_mcp
+from infra.tools.mcp.web_search_mcp import web_search_mcp
+from infra.tools.mcp.baidu_map_mcp import baidu_map_mcp
 
 
 async def call_mcp(mcp_instance: MCPServerStreamableHttp, mcp_name: str, params: dict[str, Any]):

@@ -11,7 +11,7 @@ from starlette.middleware.cors import CORSMiddleware
 from api.router import router
 from infra.logging.logger import log
 from infra.middleware.login_auth import AuthTokenMiddleware
-from infra.tools.mcp.mcp_client import connect, disconnect, heartbeat
+from infra.client.mcp_client import connect, disconnect, heartbeat
 
 
 # 初始化MCP连接

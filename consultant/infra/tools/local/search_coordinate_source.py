@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 from infra.logging.logger import log
 from infra.tools.base import BaseTool, ToolResult
-from infra.tools.mcp.mcp_client import baidu_map_mcp
+from infra.tools.mcp.baidu_map_mcp import baidu_map_mcp
 from utils.ip_utils import get_public_net_ip
 from utils.map_utils import coordinate_to_lng_lat
 

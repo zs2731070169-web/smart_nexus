@@ -4,7 +4,7 @@ from agents import Agent, ModelSettings
 
 from agent.agent_router import agent_router_registry
 from config.settings import settings
-from infra.ai.ai_client import main_model
+from infra.client.ai_client import main_model
 from utils.file_utils import load_file
 
 coordination_agent = Agent(

@@ -3,7 +3,8 @@ from contextlib import AsyncExitStack
 
 from agent.master_agent import coordination_agent
 from infra.logging.logger import log
-from infra.tools.mcp.mcp_client import web_search_mcp, baidu_map_mcp
+from infra.tools.mcp.web_search_mcp import web_search_mcp
+from infra.tools.mcp.baidu_map_mcp import baidu_map_mcp
 
 if __name__ == '__main__':
     import asyncio

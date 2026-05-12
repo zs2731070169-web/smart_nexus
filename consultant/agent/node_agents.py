@@ -1,7 +1,7 @@
 from agents import Agent, ModelSettings
 
 from config.settings import settings
-from infra.ai.ai_client import sub_model
+from infra.client.ai_client import sub_model
 from infra.tools import tool_registry
 from utils.file_utils import load_file
 
