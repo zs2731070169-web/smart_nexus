@@ -110,7 +110,7 @@ if __name__ == '__main__':
         print(f"[{name}]  {desc}")
         print(f"Query: {query}")
         print("=" * 60)
-        async for chunk in agent_engine.stream_messages(query=query, user_id=user_id, session_id=session_id, ip="156.59.13.62"):
+        async for chunk in agent_engine.stream_messages(query=query, user_id=user_id, session_id=session_id, location=(106.5507, 29.5647)):
             print(chunk, end="", flush=True)
         print()
 

@@ -4,6 +4,7 @@ from starlette.responses import StreamingResponse, JSONResponse, Response
 from agent.agent_engine import agent_engine
 from infra.logging.logger import log
 from schema.request import ChatRequest, LoginRequest, CodeRequest
+from utils.map_utils import wgs84_to_bd09
 from schema.response import ChatHistoryResp, LoginResp, CodeResp, SystemResp, LogoutResp, DelHistoryResp
 from service.login_service import login_service
 from service.session_service import session_service
@@ -11,26 +12,14 @@ from service.session_service import session_service
 router = APIRouter(prefix="/consultant")
 
 
-def _get_client_ip(request: Request) -> str:
-    """从请求中提取客户端真实 IP，优先级：X-Forwarded-For > X-Real-IP > 直连 IP"""
-    forwarded_for = request.headers.get("X-Forwarded-For")
-    if forwarded_for:
-        # 从请求链路的ip列表里获取第一个ip（用户真实的原始ip）
-        ip = forwarded_for.split(",")[0].strip()
-        log.info(f"从 X-Forwarded-For 获取到客户端 IP: {ip}，原始 X-Forwarded-For 头: {forwarded_for}")
-        return ip
-
-    real_ip = request.headers.get("X-Real-IP")
-    if real_ip:
-        # 获取上一跳ip，如果是用户直连就是用户真实ip
-        ip = real_ip.strip()
-        log.info(f"从 X-Real-IP 获取到客户端 IP: {ip}，原始 X-Real-IP 头: {real_ip}")
-        return ip
-
-    # 获取直接访问FastAPI进程的那个客户端的ip（本地：127.0.0.1，服务器：内网ip）
-    ip = request.client.host if request.client else ""
-    log.info(f"从 request.client 直接获取到客户端 IP: {ip}")
-    return ip
+def _resolve_bd09_location(chat_request: ChatRequest) -> tuple[float, float] | None:
+    """把前端定位坐标统一转换为 BD09（DB/MCP 内部使用的坐标系）。
+    前端缺省或坐标无效时返回 None，由下游按地址解析或询问用户降级。
+    """
+    lng, lat = chat_request.lng, chat_request.lat
+    if lng is None or lat is None:
+        return None
+    return wgs84_to_bd09(lng, lat)
 
 
 def _ensure_user_id(request: Request) -> Response:
@@ -107,12 +96,13 @@ async def consultant(chat_request: ChatRequest, request: Request) -> StreamingRe
     user_id = _ensure_user_id(request)
     query = chat_request.query
     session_id = chat_request.session_id
-    ip = _get_client_ip(request)
+    # 前端定位优先：统一转 BD09 后作为导航起点的最高优先级信号
+    location = _resolve_bd09_location(chat_request)
 
-    log.info(f"用户咨询对话接口被调用，用户ID: {user_id}，会话ID: {session_id}，用户问题: {query}，用户ip：{ip}")
+    log.info(f"用户咨询对话接口被调用，用户ID: {user_id}，会话ID: {session_id}，用户问题: {query}，前端定位(BD09)：{location}")
 
     # 流式返回回复消息
-    async_generator = agent_engine.stream_messages(query, user_id, session_id, ip)
+    async_generator = agent_engine.stream_messages(query, user_id, session_id, location=location)
 
     # 通过sse推送流式消息
     return StreamingResponse(

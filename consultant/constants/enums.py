@@ -41,7 +41,6 @@ TOOL_NAME_MAPPING = {
 
     # 百度地图MCP工具
     "map_geocode": "地址解析",
-    "map_ip_location": "IP定位",
     "map_url": "生成导航链接",
 
     # 本地工具

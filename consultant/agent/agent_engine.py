@@ -1,5 +1,5 @@
 import asyncio
-from typing import AsyncGenerator, AsyncIterator, Optional
+from typing import AsyncGenerator, AsyncIterator, Optional, Tuple
 
 from agents import Runner, RunConfig, StreamEvent
 
@@ -22,11 +22,11 @@ class AgentEngine:
                               query: str,
                               user_id: str,
                               session_id: str,
-                              ip: Optional[str] = None,
+                              location: Optional[Tuple[float, float]] = None,
                               retry_count: int = 0) -> AsyncGenerator:
         """
         流式处理对话生成的消息
-        :param ip:
+        :param location: 前端定位 (经度, 纬度)，BD09 坐标系；导航起点信号
         :param retry_count:
         :param query:
         :param user_id:
@@ -49,11 +49,19 @@ class AgentEngine:
             history_messages.append({"role": "user", "content": query})
             log.info(f"加载历史消息完成，用户问题: {query}，历史消息轮数: {len(history_messages)}")
 
+            # 透传给 agent 的附加上下文（仅本轮注入，不写入历史）：前端定位
+            extra_inputs = []
+            if location:
+                lng, lat = location
+                extra_inputs.append({
+                    "role": "user",
+                    "content": f"\n\n[非用户问题，用户当前位置经纬度(BD09坐标系)：经度={lng}，纬度={lat}]"
+                })
+
             # 调用协调agent
             run_result = Runner.run_streamed(
                 starting_agent=coordination_agent,
-                input=history_messages + [
-                    {"role": "user", "content": f"\n\n[非用户问题，用户当前ip：{ip}]"}] if ip else [],
+                input=history_messages + extra_inputs,
                 context=query,
                 max_turns=15,
                 run_config=RunConfig(tracing_disabled=True)
@@ -81,7 +89,7 @@ class AgentEngine:
                 # 指数级退避
                 await asyncio.sleep(jittered_backoff(retry_count + 1, base_delay=0.5, max_delay=10.0))
                 # 递归调用agent
-                async for chunk in self.stream_messages(query, user_id, session_id, ip, retry_count + 1):
+                async for chunk in self.stream_messages(query, user_id, session_id, location, retry_count + 1):
                     yield chunk
             else:
                 # 超过最大重试次数，打印错误日志

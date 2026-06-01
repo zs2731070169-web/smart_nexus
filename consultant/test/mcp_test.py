@@ -101,14 +101,6 @@ if __name__ == '__main__':
 
     asyncio.run(main(
         mcp_instance=baidu_map_mcp,
-        mcp_name="map_ip_location", # 根据唯一ip（公网）获取MC坐标，公网使用 curl cip.cc 可查看
-        params={
-            "ip": "106.89.59.112"
-        }
-    ))
-
-    asyncio.run(main(
-        mcp_instance=baidu_map_mcp,
         mcp_name="map_uri",
         params={
             "service": "direction"

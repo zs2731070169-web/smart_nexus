@@ -14,6 +14,7 @@ async def _run_sub_agent(agent, query: str, *, label: str) -> str:
     try:
         log.info(f"路由到{label}，处理用户问题: {query}")
 
+        # 执行subagent
         run_result = await Runner.run(
             starting_agent=agent,
             input=query,
@@ -21,6 +22,7 @@ async def _run_sub_agent(agent, query: str, *, label: str) -> str:
         )
 
         summary = run_result.final_output or ""
+        # 抽取子agent工具参数
         tool_calls = _extract_tool_calls(run_result)
         log.info(f"{label}运行完成，工具调用: {tool_calls}，结果长度: {len(summary)}")
 
@@ -78,7 +80,9 @@ class AgentRouterRegistry:
 
     def register(self, agent: Agent, description: str) -> None:
         async def on_invoke(_ctx, args_json: str) -> str:
+            # 协调agent传递给子agent的查询/参数
             query = json.loads(args_json or "{}").get("query", "")
+            # 执行subagent
             return await _run_sub_agent(agent, query, label=agent.name)
 
         self._routes.append(FunctionTool(

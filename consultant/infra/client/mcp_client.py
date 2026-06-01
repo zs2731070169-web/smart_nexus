@@ -6,18 +6,17 @@ from infra.logging.logger import log
 from infra.tools import tool_registry
 
 
-# 配置代理工厂，不走系统代理
-def _no_proxy_client_factory(
+def proxy_client_factory(
         headers: dict[str, str] | None = None,
         timeout: httpx.Timeout | None = None,
         auth: httpx.Auth | None = None,
 ) -> httpx.AsyncClient:
-    """创建不使用系统代理的 httpx 客户端，避免代理导致的 TLS 连接失败"""
+    """配置代理工厂，忽略系统代理环境变量（HTTP_PROXY / HTTPS_PROXY），避免代理导致的 TLS 连接失败"""
     return httpx.AsyncClient(
         headers=headers,
         timeout=timeout,
         auth=auth,
-        trust_env=False,  # 忽略系统代理环境变量（HTTP_PROXY / HTTPS_PROXY）
+        trust_env=False,
     )
 
 
