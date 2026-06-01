@@ -123,10 +123,7 @@ class MemoryManager:
             # total_rounds ≤ 3 → 全保留
             if total_rounds <= truncate_num:
                 kept = messages
-            # 3 < total_rounds ≤ 9 → 只留最近 6 条
-            elif total_rounds <= truncate_num * 3:
-                kept = messages[-truncate_num * 2:]
-            # 9 < total_rounds ≤ 18 → 首条 + 最近 6 条
+            # 3 < total_rounds ≤ 18 → 首条 + 最近 6 条
             elif total_rounds <= truncate_num * 6:
                 kept = _keep_first_and_recent(messages, recent=truncate_num * 2)
             # total_rounds > 18 → 首条 + 最近 3 条

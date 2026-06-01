@@ -32,6 +32,7 @@ class BaseTool(ABC):
         """适配为 agents 框架的 FunctionTool."""
 
         async def on_invoke(_ctx, args_json: str):
+            #JSON字符串直接反序列化为实体对象 + 校验为模型实例
             arguments = self.input_model.model_validate_json(args_json or "{}")
             result = await self.execute(arguments)
             return result.output
@@ -39,6 +40,7 @@ class BaseTool(ABC):
         return FunctionTool(
             name=self.name,
             description=self.description,
+            # 高度llm传入什么参数
             params_json_schema=self.input_model.model_json_schema(),
             on_invoke_tool=on_invoke,
         )

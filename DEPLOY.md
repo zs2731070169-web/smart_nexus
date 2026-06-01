@@ -197,17 +197,17 @@ KNOWLEDGE_BASE_URL=https://iknow.lenovo.com.cn
 ### 4.2 consultant 后端
 
 ```bash
-cd /opt/smart_nexus/backend/consultant
+cd /opt/smart_nexus/consultant
 cp .env.example .env
 nano .env
 ```
 
 ```ini
-# 阿里百炼 LLM（必填）
-AL_BAILIAN_API_KEY=你的阿里百炼 API Key
-AL_BAILIAN_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-MAIN_MODEL_NAME=qwen3.5-plus
-SUB_MODEL_NAME=qwen3.5-flash
+# Agent 主 LLM（必填）
+AL_BAILIAN_API_KEY=你的minimax API Key
+AL_BAILIAN_BASE_URL=https://api.minimaxi.com/v1
+MAIN_MODEL_NAME=MiniMax-M2.7-highspeed
+SUB_MODEL_NAME=MiniMax-M2.7-highspeed
 
 # MySQL（MYSQL_HOST 必须填 mysql，容器间通过服务名通信）
 MYSQL_HOST=mysql
