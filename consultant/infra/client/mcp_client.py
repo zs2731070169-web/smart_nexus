@@ -24,13 +24,17 @@ def _no_proxy_client_factory(
 # 初始化连接
 async def connect():
     mcp_servers = tool_registry.mcp_servers()
-    try:
-        for server in mcp_servers:
+    for server in mcp_servers:
+        try:
             await server.connect()
             log.info(f"MCP {server.name} 连接初始化成功")
-    except asyncio.CancelledError as e:
-        log.error(f"初始化 MCP 连接发生异常")
-        raise
+        except asyncio.CancelledError:
+            log.error("初始化 MCP 连接被取消")
+            raise
+        except Exception as e:
+            # 任一 MCP 连接失败即向上抛出，由 lifespan 终止服务启动
+            log.error(f"MCP {server.name} 连接初始化失败，终止服务启动: {e}")
+            raise
 
 
 # 关闭连接

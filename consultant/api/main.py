@@ -23,7 +23,9 @@ async def mcp_lifespan(app: FastAPI):
         log.error("MCP初始化被anyio cancel scope取消，服务启动中止")
         raise
     except Exception as e:
-        log.error(f"MCP初始化失败，服务将在无MCP工具状态下运行: {e}")
+        # 任一 MCP 连接失败即中止服务启动
+        log.error(f"MCP初始化失败，服务启动中止: {e}")
+        raise
 
     # 启动MCP心跳任务（后台运行，定期探活并自动重连）
     heartbeat_task = asyncio.create_task(heartbeat())
