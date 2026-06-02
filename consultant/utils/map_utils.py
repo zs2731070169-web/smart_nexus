@@ -1,6 +1,7 @@
 # 地球赤道周长的一半（单位：米），也是 Web 墨卡托坐标系的 X/Y 最大值
 import math
 from typing import Tuple
+from urllib.parse import quote
 
 # 地球赤道周长的一半（单位：米），也是 Web 墨卡托坐标系的 X/Y 最大值
 _HALF_CIRCUMFERENCE = 20037508.342789244
@@ -58,4 +59,41 @@ def wgs84_to_bd09(lng: float, lat: float) -> Tuple[float, float]:
     """WGS84（浏览器 navigator.geolocation 原始坐标）→ BD09（百度系，DB/MCP 统一使用）"""
     g_lng, g_lat = wgs84_to_gcj02(lng, lat)
     return gcj02_to_bd09(g_lng, g_lat)
+
+
+def build_baidu_direction_url(
+        origin_lng: float,
+        origin_lat: float,
+        dest_lng: float,
+        dest_lat: float,
+        dest_name: str,
+        region: str,
+        origin_name: str = "当前位置",
+        mode: str = "driving",
+) -> str:
+    """拼接百度地图 direction 导航链接
+
+    :param origin_lng: 起点经度(BD09)
+    :param origin_lat: 起点纬度(BD09)
+    :param dest_lng: 终点经度(BD09)
+    :param dest_lat: 终点纬度(BD09)
+    :param dest_name: 终点名称（服务站名）
+    :param region: 导航所在城市
+    :param origin_name: 起点名称，默认“当前位置”
+    :param mode: 导航模式，取值 driving / walking / riding / transit
+    :return: 完整的百度 direction 链接
+    """
+    # name / region 可能含中文与特殊字符，统一处理特殊符号
+    origin = f"latlng:{origin_lat},{origin_lng}|name:{quote(origin_name)}"
+    destination = f"latlng:{dest_lat},{dest_lng}|name:{quote(dest_name)}"
+    return (
+        "https://api.map.baidu.com/direction"
+        f"?origin={origin}"
+        f"&destination={destination}"
+        f"&mode={mode}"
+        "&output=html"
+        "&coord_type=bd09ll"
+        "&src=webapp.baidu.openAPIdemo"
+        f"&region={quote(region)}"
+    )
 

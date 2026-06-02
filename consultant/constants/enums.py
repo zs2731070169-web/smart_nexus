@@ -40,8 +40,7 @@ TOOL_NAME_MAPPING = {
     "tavily_search": "联网搜索",
 
     # 百度地图MCP工具
-    "map_geocode": "地址解析",
-    "map_url": "生成导航链接",
+    "map_search_places": "地点检索",
 
     # 本地工具
     "retrieval_knowledge": "查询知识库",

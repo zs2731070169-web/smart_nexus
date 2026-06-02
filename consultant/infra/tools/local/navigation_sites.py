@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 from infra.logging.logger import log
 from infra.tools.base import BaseTool, ToolResult
 from repo.database_repo import database_repo
+from utils.map_utils import build_baidu_direction_url
 
 
 class NavigationSitesArgs(BaseModel):
@@ -36,6 +37,20 @@ class NavigationSites(BaseTool):
 
             rows = await database_repo.query_list_by_lng_lat(lat=lat, lng=lng, limit=limit)
 
+            # 确定性生成完整导航链接，挂到每条记录上
+            for row in rows:
+                dest_lng = row.get("longitude")
+                dest_lat = row.get("latitude")
+                if dest_lng is not None and dest_lat is not None:
+                    row["navigation_url"] = build_baidu_direction_url(
+                        origin_lng=lng,
+                        origin_lat=lat,
+                        dest_lng=float(dest_lng),
+                        dest_lat=float(dest_lat),
+                        dest_name=row.get("service_station_name") or "目标服务站",
+                        region=row.get("city") or "",
+                    )
+
             return ToolResult(output=json.dumps({
                 "status": "success",
                 "query": {"lng": lng, "lat": lat, "count": len(rows)},
@@ -51,6 +66,5 @@ class NavigationSites(BaseTool):
                 }, ensure_ascii=False),
                 is_error=True,
             )
-
 
 navigation_sites = NavigationSites()

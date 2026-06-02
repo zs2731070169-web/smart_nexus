@@ -91,18 +91,18 @@ if __name__ == '__main__':
         })
     )
 
-    asyncio.run(main(
-        mcp_instance=baidu_map_mcp,
-        mcp_name="map_geocode", # 通过地址获取经纬度
-        params={
-            "address": "北京"
-        }
-    ))
-
-    asyncio.run(main(
-        mcp_instance=baidu_map_mcp,
-        mcp_name="map_uri",
-        params={
-            "service": "direction"
-        }
-    ))
+    # asyncio.run(main(
+    #     mcp_instance=baidu_map_mcp,
+    #     mcp_name="map_geocode", # 通过地址获取经纬度
+    #     params={
+    #         "address": "北京"
+    #     }
+    # ))
+    #
+    # asyncio.run(main(
+    #     mcp_instance=baidu_map_mcp,
+    #     mcp_name="map_uri",
+    #     params={
+    #         "service": "direction"
+    #     }
+    # ))

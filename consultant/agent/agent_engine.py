@@ -9,6 +9,7 @@ from infra.error import classify_llm_error, jittered_backoff
 from infra.logging.logger import log
 from infra.memory import MemoryManager, default_compressor
 from schema.response import StreamMessages
+from utils.map_utils import wgs84_to_bd09
 from utils.tag_extract_utils import make_think_state, extract_think_tag, flush_think_tag
 
 
@@ -40,6 +41,14 @@ class AgentEngine:
                 error_message="请求缺少会话id，无法加载历史消息，请确保 session_id 并随请求携带"
             ).model_dump_json() + "\n\n")
             return
+
+        # 把前端定位坐标统一转换为 BD09（DB/MCP 内部使用的坐标系）
+        if location is not None:
+            lng, lat = location[0], location[1]
+            if lng is None or lat is None:
+                location = None
+            else:
+                location = wgs84_to_bd09(lng, lat)
 
         # 记录已发出的流式帧数，用于判断重试是否会导致重复内容
         chunks_sent = 0

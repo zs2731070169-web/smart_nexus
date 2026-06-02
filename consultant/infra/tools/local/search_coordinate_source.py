@@ -7,9 +7,6 @@ from infra.logging.logger import log
 from infra.tools.base import BaseTool, ToolResult
 from infra.tools.mcp.baidu_map_mcp import baidu_map_mcp
 
-# 地址解析精度阈值, 低于此值时视为无效地址
-_MIN_CONFIDENCE = 60
-
 
 class SearchCoordinateSourceArgs(BaseModel):
     address: str = Field(default="", description="用户明确说出的出发地点名称；用户提到出发地就传入")
@@ -26,15 +23,16 @@ class SearchCoordinateSource(BaseTool):
         address = arguments.address
         has_gps = arguments.lng is not None and arguments.lat is not None
 
-        # 用户明确给出地址 → 优先按地址反查（尊重用户明确意图）
+        # 用户明确给出出发地址 → 优先按地点名称做 POI 检索（尊重用户明确意图）
         if address:
-            coord = await self._geocode(address)
+            # 按地点名称做 POI 检索，返回最匹配地点的真实坐标
+            coord = await self._call_search(address)
             if coord is not None:
                 lng, lat = coord
-                log.info(f"按地点名称获取坐标成功，地址：{address}，经度：{lng}，纬度：{lat}")
+                log.info(f"按地点名称检索坐标成功，地址：{address}，经度：{lng}，纬度：{lat}")
                 return self._ok(lng, lat)
-            # 地址解析失败或精度过低：若有前端定位则回退，否则进入询问分支
-            log.info(f"地址解析失败或精度过低，地址：{address}，{'尝试回退前端定位' if has_gps else '且无前端定位'}")
+            # 检索失败或无有效结果：若有前端定位则回退，否则进入询问分支
+            log.info(f"地点检索失败或无结果，地址：{address}，{'尝试回退前端定位' if has_gps else '且无前端定位'}")
 
         # 前端 GPS 定位兜底（已统一为 BD09，直接采用）
         if has_gps:
@@ -55,46 +53,42 @@ class SearchCoordinateSource(BaseTool):
     def _ok(lng: float, lat: float) -> ToolResult:
         return ToolResult(output=json.dumps({"lng": lng, "lat": lat}, ensure_ascii=False))
 
-    async def _geocode(self, address: str) -> Optional[Tuple[float, float]]:
-        """按地点名称反查坐标。失败或精度过低时返回 None（不抛异常），以便上层回退到前端定位。"""
+    @staticmethod
+    async def _call_search(address: str) -> Optional[Tuple[float, float]]:
+        """单次调用 map_search_places，取首条带坐标的结果。失败/无结果返回 None（不抛异常）。"""
         try:
-            log.info(f"开始按地点名称查询坐标，地址：{address}")
+            log.info(f"开始按地点名称检索坐标，地址：{address}")
             tool_result = await baidu_map_mcp.call_tool(
-                tool_name="map_geocode",
-                arguments={"address": address}
+                tool_name="map_search_places",
+                arguments={"query": address}
             )
 
             if tool_result.isError:
-                log.warning(f"通过地点名称获取坐标失败，地址：{address}，错误信息：{tool_result.error}")
+                log.warning(f"地点检索失败，地址：{address}，错误信息：{tool_result.error}")
                 return None
 
             content = tool_result.content[0]
             text = getattr(content, 'text', None)
             if not text:
-                log.warning(f"通过地点名称获取坐标失败，地址：{address}，返回内容缺少text文本字段")
+                log.warning(f"地点检索失败，地址：{address}，返回内容缺少text文本字段")
                 return None
 
             result_dict = json.loads(text)
             if result_dict.get('status') != 0:
-                log.warning(f"通过地点名称获取坐标失败，地址：{address}，返回状态码非0：{result_dict.get('status')}")
+                log.warning(f"地点检索失败，地址：{address}，返回状态码非0：{result_dict.get('status')}")
                 return None
 
-            result = result_dict.get('result') or {}
-            location = result.get('location') or {}
-            if 'lng' not in location or 'lat' not in location:
-                log.warning(f"通过地点名称获取坐标失败，地址：{address}，返回结果缺少经纬度字段")
-                return None
+            # results 已按相关性/距离排序，取首条带坐标的 POI 即为最佳匹配
+            for poi in result_dict.get('results') or []:
+                location = poi.get('location') or {}
+                if 'lng' in location and 'lat' in location:
+                    log.info(f"地点检索命中，地址：{address}，匹配POI：{poi.get('name')}，"f"经度：{location['lng']}，纬度：{location['lat']}")
+                    return location['lng'], location['lat']
 
-            # 防御式精度校验：仅当百度返回了 precise/confidence 字段时才判断，避免模糊地址被作为错误起点
-            precise = result.get('precise')
-            confidence = result.get('confidence')
-            if precise == 0 and isinstance(confidence, (int, float)) and confidence < _MIN_CONFIDENCE:
-                log.warning(f"地址解析精度过低，地址：{address}，precise={precise}，confidence={confidence}，视为无效")
-                return None
-
-            return location['lng'], location['lat']
+            log.warning(f"地点检索无有效结果，地址：{address}")
+            return None
         except Exception as e:
-            log.warning(f"按地点名称获取坐标异常，地址：{address}，错误信息：{str(e)}")
+            log.warning(f"地点检索异常，地址：{address}，错误信息：{str(e)}")
             return None
 
 
