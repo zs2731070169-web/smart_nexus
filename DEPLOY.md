@@ -178,7 +178,7 @@ Let's Encrypt 证书有效期 90 天，设置 cron 每月自动续签：
 ### 4.1 knowledge 后端
 
 ```bash
-cd /opt/smart_nexus/backend/knowledge
+cd /opt/smart_nexus/knowledge
 cp .env.example .env
 nano .env
 ```
