@@ -23,95 +23,78 @@ Smart Nexus 是一个 **AI 原生的微服务架构** 企业级智能售后顾�
 
 ## 🏗️ 系统架构
 
-### 整体架构
+### 整体架构与 Agent 编排
 
-```
-┌─────────────────────────────────────────────────────────┐
-│              Electron 桌面客户端                         │
-│           (Windows / macOS / Linux)                     │
-└────────────────┬────────────────────────────────────────┘
-                 │ HTTPS
-┌────────────────v────────────────────────────────────────┐
-│                Nginx 反向代理                           │
-│          (负载均衡 + SSL 终止)                          │
-└──────┬──────────────────────────────┬──────────────────┘
-       │                              │
-       v                              v
-   /consultant                    /knowledge
-       │                              │
-┌──────────────────────────┐  ┌──────────────────┐
-│   Consultant 服务        │  │  Knowledge 服务  │
-│   (端口 8001)            │  │  (端口 8000)     │
-├──────────────────────────┤  ├──────────────────┤
-│ • Agent 编排             │  │ • 爬虫模块       │
-│ • MCP 工具集成           │  │ • 文本切片       │
-│ • SSE 流式响应           │  │ • 向量化处理     │
-│ • 认证 & 日志            │  │ • 双路召回       │
-└────────┬─────────────────┘  │ • ChromaDB       │
-         │                    └──────────────────┘
-         ├─────────────────────────────┤
-         v                             v
-    ┌─────────────┐  ┌──────────────────────┐
-    │   MySQL     │  │  Redis (缓存)        │
-    │ (用户/日志) │  │ (Session/临时数据)   │
-    └─────────────┘  └──────────────────────┘
-```
+```mermaid
+flowchart TB
+    client["Electron 桌面客户端<br/>Windows / macOS / Linux"]
+    nginx["Nginx 反向代理<br/>负载均衡 + SSL 终止"]
 
-### Consultant 核心 - 三层 Agent 编排
+    subgraph consultant["咨询服务（端口 8001）"]
+        api["FastAPI API<br/>SSE 流式响应<br/>认证 & 日志"]
+        coordination["意图理解 / 实体抽取 / 子agent分发<br/>主控 Agent"]
+        router["Multi-Agent路由器"]
+        consult["问答任务 / RAG 检索 / Web检索<br/>咨询 Agent"]
+        navigation["线下门店导航 / 位置相关推荐<br/>导航 Agent"]
+        tools["Local Tools / MCP Servers / Sub-Agents<br/>工具注册器"]
 
-```
-┌─────────────────────────────────────────────────────────┐
-│         coordination_agent (ReAct, max_turns=15)        │
-│              [L1 - 主控 Agent]                          │
-└────────────────┬────────────────────────────────────────┘
-                 │
-        agent_router_registry
-                 │
-     ┌───────────┴────────────┐
-     v                        v
-┌──────────────┐      ┌──────────────────┐
-│ consult_     │      │ navigation_      │
-│ agent (L3)   │      │ agent (L3)       │
-├──────────────┤      ├──────────────────┤
-│ • 知识库问答 │      │ • 地理定位       │
-│ • RAG 检索   │      │ �� 门店导航       │
-│ • 响应生成   │      │ • 位置相关推荐   │
-└──────┬───────┘      └────────┬─────────┘
-       │                       │
-       └────┬──────────┬───────┘
-            v          v
-        ┌─────────────────────┐
-        │  tool_registry      │
-        ├─────────────────────┤
-        │ • Local Tools       │
-        │ • MCP Servers       │
-        │ • Function Tools    │
-        └─────────────────────┘
+        api --> coordination
+        coordination --> router
+        router --> consult
+        router --> navigation
+        consult --> tools
+        navigation --> tools
+    end
+
+    subgraph knowledge["知识库服务"]
+        retrieval["双路召回<br/>向量检索 + 关键词召回"]
+        crawler["爬虫模块"]
+        chunk["文本切片"]
+        embedding["向量化处理"]
+        chroma["ChromaDB"]
+
+        crawler --> chunk
+        chunk --> embedding
+        embedding --> chroma
+        retrieval --> chroma
+    end
+
+    mysql[("MySQL<br/>用户 / 日志")]
+    redis[("Redis<br/>Session / 临时数据")]
+
+    client -->|HTTPS| nginx
+    nginx -->|/consultant| api
+    nginx -->|/knowledge| retrieval
+    consult -->|HTTP 检索| retrieval
+    api --> mysql
+    api --> redis
 ```
 
 ### Knowledge 核心 - 双路召回
 
-```
-用户查询 "如何维修 ThinkPad？"
-    │
-    ├─────────────┬─────────────────┐
-    v             v                 v
- 路 A            路 B           (并行处理)
-Chroma          关键词
-向量检索        召回
-(top_5)         │
- │              ├─ Jieba 分词 (70%)
- │              ├─ 字符集匹配 (30%)
- │              ├─ Jaccard 粗排
- │              └─ 标题向量 + 关键词分精排
- │
- └──────────────┬──────────────┘
-                v
-         MD5 去重合并
-                v
-         余弦 0.5 阈值
-                v
-         返回 Top-K 结果
+```mermaid
+flowchart TB
+    query["用户查询<br/>如何维修 ThinkPad？"]
+    vector["路 A：Chroma 向量检索<br/>top_5"]
+    keyword["路 B：关键词召回"]
+    jieba["Jieba 分词<br/>70%"]
+    charset["字符集匹配<br/>30%"]
+    jaccard["Jaccard 粗排"]
+    rerank["标题向量 + 关键词分精排"]
+    merge["MD5 去重合并"]
+    threshold["余弦 0.5 阈值"]
+    result["返回 Top-K 结果"]
+
+    query --> vector
+    query --> keyword
+    keyword --> jieba
+    keyword --> charset
+    keyword --> jaccard
+    keyword --> rerank
+    vector --> merge
+    rerank --> merge
+    merge --> threshold
+    threshold --> result
 ```
 
 ---
