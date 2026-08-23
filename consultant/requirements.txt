@@ -5,12 +5,13 @@ pydantic
 pydantic-settings
 pymysql
 DBUtils
-openai
+openai==1.97.0
 httpx
-openai-agents
+openai-agents==0.1.0
 pystun3
 redis
 orjson
 PyJWT
 requests
 anyio
+mcp<2.0.0

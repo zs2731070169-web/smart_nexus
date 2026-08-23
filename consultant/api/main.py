@@ -11,38 +11,36 @@ from starlette.middleware.cors import CORSMiddleware
 from api.router import router
 from infra.logging.logger import log
 from infra.middleware.login_auth import AuthTokenMiddleware
-from infra.client.mcp_client import connect, disconnect, heartbeat
+from infra.client.mcp_client import manage_connections
 
 
 # 初始化MCP连接
 @asynccontextmanager
 async def mcp_lifespan(app: FastAPI):
-    try:
-        await connect()  # 启动服务器的时候创建连接
-    except asyncio.CancelledError:
-        log.error("MCP初始化被anyio cancel scope取消，服务启动中止")
-        raise
-    except Exception as e:
-        # 任一 MCP 连接失败即中止服务启动
-        log.error(f"MCP初始化失败，服务启动中止: {e}")
-        raise
+    # MCP 连接的建立/探活/重连/关闭全部收拢在管理任务内完成：
+    # anyio cancel scope 与任务绑定，跨任务 enter/exit 会取消原任务并使会话失效
+    first_round_done = asyncio.Event()
+    init_error = []
+    manager_task = asyncio.create_task(
+        manage_connections(first_round_done=first_round_done, init_error=init_error)
+    )
 
-    # 启动MCP心跳任务（后台运行，定期探活并自动重连）
-    heartbeat_task = asyncio.create_task(heartbeat())
+    # 等待首轮连接结束（成功/失败都会 set）
+    await first_round_done.wait()
+    if init_error:
+        # 等管理任务完成收尾清理，并以其异常中止服务启动（保持"任一 MCP 失败即不启动"语义）
+        await manager_task
+
     try:
         yield
     finally:
-        # 停止心跳任务（发送异步任务取消信号）
-        heartbeat_task.cancel()
+        # 取消管理任务，由其在内部统一关闭全部 MCP 连接（同任务内 exit，安全）
+        manager_task.cancel()
         try:
-            # 等待异步任务真正结束
-            await heartbeat_task
+            await manager_task
             log.info("MCP心跳任务已停止")
-
-            # 销毁服务器的时候关闭连接
-            await disconnect()
         except asyncio.CancelledError:
-            log.warning("MCP心跳任务异常停止...")
+            log.info("MCP心跳任务已停止")
         except BaseException as e:
             log.error(f"MCP连接关闭时发生异常: {e}")
 
